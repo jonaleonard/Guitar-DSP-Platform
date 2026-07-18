@@ -4,3 +4,8 @@ target_include_directories(guitar_dsp_platform
     PRIVATE
         ${CMAKE_SOURCE_DIR}/include
 )
+
+target_link_libraries(guitar_dsp_platform
+    PRIVATE
+        RtAudio::rtaudio
+)
