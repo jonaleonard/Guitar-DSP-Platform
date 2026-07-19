@@ -4,6 +4,8 @@
 
 #include <RtAudio.h>
 
+#include <array>
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <string>
