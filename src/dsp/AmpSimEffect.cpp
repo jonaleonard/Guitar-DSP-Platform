@@ -9,13 +9,14 @@ namespace dsp {
 
 AmpSimEffect::AmpSimEffect()
 {
-    preGain_.reset(2.0f);
-    drive_.reset(6.0f);
-    bassDb_.reset(2.0f);
+    // Neutral / near-clean defaults — coloration comes from user edits.
+    preGain_.reset(1.0f);
+    drive_.reset(1.0f);
+    bassDb_.reset(0.0f);
     midDb_.reset(0.0f);
-    trebleDb_.reset(1.0f);
+    trebleDb_.reset(0.0f);
     presenceDb_.reset(0.0f);
-    master_.reset(0.6f);
+    master_.reset(1.0f);
 }
 
 void AmpSimEffect::prepare(const double sampleRate, int /*maxBlockSize*/)
@@ -36,9 +37,9 @@ void AmpSimEffect::prepare(const double sampleRate, int /*maxBlockSize*/)
     toneHigh_.reset();
     presence_.reset();
 
-    // Fixed mild pre-EQ: scoop a little mud, tame extreme highs before drive.
-    preLow_.setCoefficients(Biquad::design(BiquadType::LowShelf, sampleRate_, 100.0f, 0.7f, -2.0f));
-    preHigh_.setCoefficients(Biquad::design(BiquadType::HighShelf, sampleRate_, 5000.0f, 0.7f, -3.0f));
+    // Flat pre-EQ by default (no baked-in scoop).
+    preLow_.setCoefficients(Biquad::design(BiquadType::LowShelf, sampleRate_, 100.0f, 0.7f, 0.0f));
+    preHigh_.setCoefficients(Biquad::design(BiquadType::HighShelf, sampleRate_, 5000.0f, 0.7f, 0.0f));
     updateTone();
 }
 

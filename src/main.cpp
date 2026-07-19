@@ -1,12 +1,15 @@
 #include "audio/AudioEngine.h"
 #include "dsp/AmpSimEffect.h"
 #include "dsp/CabinetEffect.h"
+#include "dsp/ChorusEffect.h"
 #include "dsp/CompressorEffect.h"
+#include "dsp/DelayEffect.h"
 #include "dsp/EffectGraph.h"
 #include "dsp/EqualizerEffect.h"
 #include "dsp/GainEffect.h"
 #include "dsp/NoiseGateEffect.h"
 #include "dsp/OverdriveEffect.h"
+#include "dsp/ReverbEffect.h"
 #include "dsp/SyntheticIr.h"
 
 #include <algorithm>
@@ -18,7 +21,6 @@
 #include <sstream>
 #include <string>
 #include <thread>
-#include <vector>
 
 namespace {
 
@@ -31,27 +33,52 @@ enum Slot : int {
     kEq = 3,
     kAmp = 4,
     kCab = 5,
-    kGain = 6
+    kChorus = 6,
+    kDelay = 7,
+    kReverb = 8,
+    kGain = 9,
+    kNumSlots = 10
 };
 
 struct AudioApp {
     dsp::EffectGraph graph;
     std::array<float, kMaxBlockFrames> mono{};
     std::atomic<bool> running{true};
+    std::array<bool, kNumSlots> bypassed{};
 };
 
 void printHelp()
 {
-    std::cout << "\nPhase 5 chain: Gate → Comp → Drive → EQ → Amp → Cab → Gain\n"
-              << "Commands:\n"
-              << "  gt/ct/cr/cm/d/dm/g     gate/comp/drive/gain (same as Phase 4)\n"
-              << "  el/em/eh <db>         EQ low/mid/high gain dB\n"
-              << "  ap/ad/am <n>          amp preGain / drive / master\n"
-              << "  ab/ami/at/apr <db>    amp bass/mid/treble/presence\n"
-              << "  cx <0..1>             cab mix\n"
-              << "  bg bc bd be ba bb bn  bypass gate/comp/drive/eq/amp/cab/gain\n"
-              << "  a                     rapid post-gain automation (zipper check)\n"
-              << "  s / h / q\n\n";
+    std::cout
+        << "\nStarts CLEAN (wire-through). Editing a parameter enables that effect.\n"
+        << "Chain: Gate→Comp→Drive→EQ→Amp→Cab→Chorus→Delay→Reverb→Gain\n\n"
+        << "  gt <db>   gate threshold          ct/cr/cm  comp thresh/ratio/makeup\n"
+        << "  d/dm      drive / mix              el/em/eh  EQ low/mid/high dB\n"
+        << "  ap/ad/am  amp pre/drive/master    ab/ami/at/apr  amp tone\n"
+        << "  cx <0..1> cab mix\n"
+        << "  chr/chd/chm   chorus rate/depth/mix\n"
+        << "  dt/df/dx      delay time_ms/feedback/mix\n"
+        << "  rr/rd/rx      reverb room/damping/mix\n"
+        << "  g <0..2>  output gain\n"
+        << "  bg bc bd be ba bb bch bdl br bn   toggle bypass per effect\n"
+        << "  clean     bypass all color FX again (back to wire)\n"
+        << "  a / s / h / q\n\n";
+}
+
+void setBypass(AudioApp& app, const int slot, const bool bypassed, const char* name)
+{
+    app.bypassed[static_cast<std::size_t>(slot)] = bypassed;
+    app.graph.setBypassed(slot, bypassed);
+    if (name != nullptr) {
+        std::cout << name << (bypassed ? " bypassed (off)\n" : " enabled\n");
+    }
+}
+
+void enable(AudioApp& app, const int slot, const char* name)
+{
+    if (app.bypassed[static_cast<std::size_t>(slot)]) {
+        setBypass(app, slot, false, name);
+    }
 }
 
 } // namespace
@@ -70,55 +97,45 @@ int main()
     config.scheduleRealtime = true;
 
     auto app = std::make_shared<AudioApp>();
-    audio::AudioEngine engine(config);
+    app->bypassed.fill(true);
+    app->bypassed[kGain] = false;
 
+    audio::AudioEngine engine(config);
     app->graph.prepare(static_cast<double>(config.sampleRate),
                        static_cast<int>(config.bufferFrames));
 
+    // Neutral constructors + bypassed = clean wire until you edit.
     auto gate = std::make_unique<dsp::NoiseGateEffect>();
-    gate->setParameter(dsp::NoiseGateEffect::kThresholdDb, -50.0f);
-
     auto comp = std::make_unique<dsp::CompressorEffect>();
-    comp->setParameter(dsp::CompressorEffect::kThresholdDb, -18.0f);
-    comp->setParameter(dsp::CompressorEffect::kRatio, 3.0f);
-    comp->setParameter(dsp::CompressorEffect::kMakeupDb, 2.0f);
-
     auto drive = std::make_unique<dsp::OverdriveEffect>();
-    drive->setParameter(dsp::OverdriveEffect::kDrive, 2.0f);
-    drive->setParameter(dsp::OverdriveEffect::kMix, 0.4f);
-    drive->setParameter(dsp::OverdriveEffect::kOutput, 0.85f);
-
     auto eq = std::make_unique<dsp::EqualizerEffect>();
-    eq->setParameter(dsp::EqualizerEffect::kLowGainDb, 1.0f);
-    eq->setParameter(dsp::EqualizerEffect::kMidGainDb, -1.0f);
-    eq->setParameter(dsp::EqualizerEffect::kHighGainDb, 2.0f);
-
     auto amp = std::make_unique<dsp::AmpSimEffect>();
-    amp->setParameter(dsp::AmpSimEffect::kPreGain, 2.5f);
-    amp->setParameter(dsp::AmpSimEffect::kDrive, 5.0f);
-    amp->setParameter(dsp::AmpSimEffect::kBassDb, 2.0f);
-    amp->setParameter(dsp::AmpSimEffect::kMidDb, 0.0f);
-    amp->setParameter(dsp::AmpSimEffect::kTrebleDb, 1.5f);
-    amp->setParameter(dsp::AmpSimEffect::kMaster, 0.55f);
-
     auto cab = std::make_unique<dsp::CabinetEffect>();
     const auto ir = dsp::makeSyntheticCabIr(2048, config.sampleRate);
     if (!cab->loadImpulseResponse(ir.data(), static_cast<int>(ir.size()))) {
-        std::cerr << "Failed to load synthetic cabinet IR.\n";
+        std::cerr << "Failed to load cabinet IR.\n";
         return 1;
     }
-    cab->setParameter(dsp::CabinetEffect::kMix, 1.0f);
-    cab->setParameter(dsp::CabinetEffect::kLevel, 1.0f);
-
+    auto chorus = std::make_unique<dsp::ChorusEffect>();
+    auto delay = std::make_unique<dsp::DelayEffect>();
+    auto reverb = std::make_unique<dsp::ReverbEffect>();
     auto gain = std::make_unique<dsp::GainEffect>();
-    gain->setParameter(dsp::GainEffect::kGain, 1.0f);
 
     if (!app->graph.insert(std::move(gate), kGate) || !app->graph.insert(std::move(comp), kComp) ||
         !app->graph.insert(std::move(drive), kDrive) || !app->graph.insert(std::move(eq), kEq) ||
         !app->graph.insert(std::move(amp), kAmp) || !app->graph.insert(std::move(cab), kCab) ||
+        !app->graph.insert(std::move(chorus), kChorus) ||
+        !app->graph.insert(std::move(delay), kDelay) ||
+        !app->graph.insert(std::move(reverb), kReverb) ||
         !app->graph.insert(std::move(gain), kGain)) {
-        std::cerr << "Failed to build effect graph.\n";
+        std::cerr << "Failed to build graph.\n";
         return 1;
+    }
+    app->graph.flushCommands();
+
+    // Apply startup bypass (everything but gain).
+    for (int i = 0; i < kNumSlots; ++i) {
+        app->graph.setBypassed(i, app->bypassed[static_cast<std::size_t>(i)]);
     }
     app->graph.flushCommands();
 
@@ -143,14 +160,14 @@ int main()
             }
             app->graph.process(app->mono.data(), frames);
             for (int i = 0; i < frames; ++i) {
-                const float sample = app->mono[static_cast<std::size_t>(i)];
+                const float s = app->mono[static_cast<std::size_t>(i)];
                 if (outputChannels == 1) {
-                    output[i] = sample;
+                    output[i] = s;
                 } else {
-                    output[(i * outputChannels)] = sample;
-                    output[(i * outputChannels) + 1] = sample;
+                    output[i * outputChannels] = s;
+                    output[i * outputChannels + 1] = s;
                     for (int c = 2; c < outputChannels; ++c) {
-                        output[(i * outputChannels) + c] = 0.0f;
+                        output[i * outputChannels + c] = 0.0f;
                     }
                 }
             }
@@ -159,31 +176,27 @@ int main()
     if (!engine.start()) {
         return 1;
     }
-
     app->graph.prepare(static_cast<double>(engine.sampleRate()),
                        static_cast<int>(engine.bufferFrames()));
 
     std::cout << "Input: " << engine.inputDeviceName() << "\n";
     std::cout << "Output: " << engine.outputDeviceName() << "\n";
-    std::cout << "Sample rate: " << engine.sampleRate()
-              << " Hz, buffer: " << engine.bufferFrames() << "\n";
-    std::cout << "Phase 5: Gate→Comp→Drive→EQ→Amp→Cab(IR)→Gain\n";
-    std::cout << "Cab IR: synthetic 2048-sample IR loaded.\n";
-    std::cout << "Zipper fix: exponential gain smoothing (~80ms).\n";
-
+    std::cout << "Buffer: " << engine.bufferFrames() << " @ " << engine.sampleRate() << " Hz\n";
+    std::cout << "Phase 6: CLEAN start — guitar wire-through until you edit params.\n";
     printHelp();
 
-    bool bypassGate = false, bypassComp = false, bypassDrive = false, bypassEq = false;
-    bool bypassAmp = false, bypassCab = false, bypassGain = false;
     std::atomic<float> gainValue{1.0f};
     std::atomic<bool> automationRunning{false};
 
-    float gateThresh = -50.0f, compThresh = -18.0f, compRatio = 3.0f, compMakeup = 2.0f;
-    float driveAmt = 2.0f, driveMix = 0.4f;
-    float eqLow = 1.0f, eqMid = -1.0f, eqHigh = 2.0f;
-    float ampPre = 2.5f, ampDrive = 5.0f, ampMaster = 0.55f;
-    float ampBass = 2.0f, ampMid = 0.0f, ampTreble = 1.5f, ampPresence = 0.0f;
-    float cabMix = 1.0f;
+    float gateThresh = -80.0f, compThresh = 0.0f, compRatio = 1.0f, compMakeup = 0.0f;
+    float driveAmt = 1.0f, driveMix = 0.0f;
+    float eqLow = 0.0f, eqMid = 0.0f, eqHigh = 0.0f;
+    float ampPre = 1.0f, ampDrive = 1.0f, ampMaster = 1.0f;
+    float ampBass = 0.0f, ampMid = 0.0f, ampTreble = 0.0f, ampPresence = 0.0f;
+    float cabMix = 0.0f;
+    float chRate = 0.8f, chDepth = 3.0f, chMix = 0.0f;
+    float delTime = 350.0f, delFb = 0.35f, delMix = 0.0f;
+    float revRoom = 0.5f, revDamp = 0.5f, revMix = 0.0f;
 
     std::thread statusThread([app, &engine]() {
         while (app->running.load(std::memory_order_relaxed)) {
@@ -200,12 +213,6 @@ int main()
         }
     });
 
-    auto toggle = [&](int slot, bool& flag, const char* name) {
-        flag = !flag;
-        app->graph.setBypassed(slot, flag);
-        std::cout << name << " bypass: " << (flag ? "ON" : "OFF") << "\n";
-    };
-
     std::string line;
     while (app->running.load(std::memory_order_relaxed) && std::getline(std::cin, line)) {
         if (line.empty()) {
@@ -215,66 +222,7 @@ int main()
         std::string cmd;
         iss >> cmd;
 
-        if (cmd == "q" || cmd == "quit") {
-            break;
-        }
-        if (cmd == "h" || cmd == "help") {
-            printHelp();
-            continue;
-        }
-        if (cmd == "bg") {
-            toggle(kGate, bypassGate, "Gate");
-            continue;
-        }
-        if (cmd == "bc") {
-            toggle(kComp, bypassComp, "Comp");
-            continue;
-        }
-        if (cmd == "bd") {
-            toggle(kDrive, bypassDrive, "Drive");
-            continue;
-        }
-        if (cmd == "be") {
-            toggle(kEq, bypassEq, "EQ");
-            continue;
-        }
-        if (cmd == "ba") {
-            toggle(kAmp, bypassAmp, "Amp");
-            continue;
-        }
-        if (cmd == "bb") {
-            toggle(kCab, bypassCab, "Cab");
-            continue;
-        }
-        if (cmd == "bn" || cmd == "b") {
-            toggle(kGain, bypassGain, "Gain");
-            continue;
-        }
-
-        if (cmd == "a") {
-            if (automationRunning.exchange(true)) {
-                std::cout << "Automation already running.\n";
-                continue;
-            }
-            std::cout << "Rapid post-gain 0↔1 every 10ms for 5s (should be zipper-free)...\n";
-            std::thread([app, &automationRunning, &gainValue]() {
-                const auto start = std::chrono::steady_clock::now();
-                float value = 0.0f;
-                while (std::chrono::steady_clock::now() - start < std::chrono::seconds(5)) {
-                    value = (value < 0.5f) ? 1.0f : 0.0f;
-                    gainValue.store(value, std::memory_order_relaxed);
-                    app->graph.setParameter(kGain, dsp::GainEffect::kGain, value);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                }
-                gainValue.store(1.0f, std::memory_order_relaxed);
-                app->graph.setParameter(kGain, dsp::GainEffect::kGain, 1.0f);
-                automationRunning.store(false);
-                std::cout << "Automation done.\n";
-            }).detach();
-            continue;
-        }
-
-        auto readFloat = [&](float& dest, float lo, float hi) -> bool {
+        auto rd = [&](float& dest, float lo, float hi) -> bool {
             float v = dest;
             if (!(iss >> v)) {
                 return false;
@@ -283,89 +231,272 @@ int main()
             return true;
         };
 
-        if (cmd == "gt" && readFloat(gateThresh, -80.0f, 0.0f)) {
+        if (cmd == "q" || cmd == "quit") {
+            break;
+        }
+        if (cmd == "h" || cmd == "help") {
+            printHelp();
+            continue;
+        }
+        if (cmd == "clean") {
+            for (int i = 0; i < kGain; ++i) {
+                setBypass(*app, i, true, nullptr);
+            }
+            setBypass(*app, kGain, false, nullptr);
+            std::cout << "Clean: all color FX bypassed.\n";
+            continue;
+        }
+
+        auto toggle = [&](int slot, const char* name) {
+            const bool next = !app->bypassed[static_cast<std::size_t>(slot)];
+            setBypass(*app, slot, next, name);
+        };
+        if (cmd == "bg") {
+            toggle(kGate, "Gate");
+            continue;
+        }
+        if (cmd == "bc") {
+            toggle(kComp, "Comp");
+            continue;
+        }
+        if (cmd == "bd") {
+            toggle(kDrive, "Drive");
+            continue;
+        }
+        if (cmd == "be") {
+            toggle(kEq, "EQ");
+            continue;
+        }
+        if (cmd == "ba") {
+            toggle(kAmp, "Amp");
+            continue;
+        }
+        if (cmd == "bb") {
+            toggle(kCab, "Cab");
+            continue;
+        }
+        if (cmd == "bch") {
+            toggle(kChorus, "Chorus");
+            continue;
+        }
+        if (cmd == "bdl") {
+            toggle(kDelay, "Delay");
+            continue;
+        }
+        if (cmd == "br") {
+            toggle(kReverb, "Reverb");
+            continue;
+        }
+        if (cmd == "bn") {
+            toggle(kGain, "Gain");
+            continue;
+        }
+
+        if (cmd == "a") {
+            if (automationRunning.exchange(true)) {
+                std::cout << "Automation already running.\n";
+                continue;
+            }
+            enable(*app, kGain, "Gain");
+            std::thread([app, &automationRunning, &gainValue]() {
+                const auto start = std::chrono::steady_clock::now();
+                float value = 0.0f;
+                while (std::chrono::steady_clock::now() - start < std::chrono::seconds(5)) {
+                    value = (value < 0.5f) ? 1.0f : 0.0f;
+                    gainValue.store(value);
+                    app->graph.setParameter(kGain, dsp::GainEffect::kGain, value);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
+                gainValue.store(1.0f);
+                app->graph.setParameter(kGain, dsp::GainEffect::kGain, 1.0f);
+                automationRunning.store(false);
+                std::cout << "Automation done.\n";
+            }).detach();
+            continue;
+        }
+
+        if (cmd == "gt" && rd(gateThresh, -80.0f, 0.0f)) {
+            enable(*app, kGate, "Gate");
             app->graph.setParameter(kGate, dsp::NoiseGateEffect::kThresholdDb, gateThresh);
             std::cout << "Gate thresh " << gateThresh << " dB\n";
             continue;
         }
-        if (cmd == "ct" && readFloat(compThresh, -60.0f, 0.0f)) {
+        if (cmd == "ct" && rd(compThresh, -60.0f, 0.0f)) {
+            enable(*app, kComp, "Comp");
             app->graph.setParameter(kComp, dsp::CompressorEffect::kThresholdDb, compThresh);
             std::cout << "Comp thresh " << compThresh << " dB\n";
             continue;
         }
-        if (cmd == "cr" && readFloat(compRatio, 1.0f, 20.0f)) {
+        if (cmd == "cr" && rd(compRatio, 1.0f, 20.0f)) {
+            enable(*app, kComp, "Comp");
             app->graph.setParameter(kComp, dsp::CompressorEffect::kRatio, compRatio);
             std::cout << "Comp ratio " << compRatio << "\n";
             continue;
         }
-        if (cmd == "cm" && readFloat(compMakeup, -24.0f, 24.0f)) {
+        if (cmd == "cm" && rd(compMakeup, -24.0f, 24.0f)) {
+            enable(*app, kComp, "Comp");
             app->graph.setParameter(kComp, dsp::CompressorEffect::kMakeupDb, compMakeup);
             std::cout << "Comp makeup " << compMakeup << " dB\n";
             continue;
         }
-        if (cmd == "d" && readFloat(driveAmt, 1.0f, 25.0f)) {
+        if (cmd == "d" && rd(driveAmt, 1.0f, 25.0f)) {
+            enable(*app, kDrive, "Drive");
             app->graph.setParameter(kDrive, dsp::OverdriveEffect::kDrive, driveAmt);
-            std::cout << "Drive " << driveAmt << "\n";
+            if (driveMix < 0.05f) {
+                driveMix = 0.7f;
+                app->graph.setParameter(kDrive, dsp::OverdriveEffect::kMix, driveMix);
+            }
+            std::cout << "Drive " << driveAmt << " mix " << driveMix << "\n";
             continue;
         }
-        if (cmd == "dm" && readFloat(driveMix, 0.0f, 1.0f)) {
+        if (cmd == "dm" && rd(driveMix, 0.0f, 1.0f)) {
+            enable(*app, kDrive, "Drive");
             app->graph.setParameter(kDrive, dsp::OverdriveEffect::kMix, driveMix);
             std::cout << "Drive mix " << driveMix << "\n";
             continue;
         }
-        if (cmd == "el" && readFloat(eqLow, -18.0f, 18.0f)) {
+        if (cmd == "el" && rd(eqLow, -18.0f, 18.0f)) {
+            enable(*app, kEq, "EQ");
             app->graph.setParameter(kEq, dsp::EqualizerEffect::kLowGainDb, eqLow);
             std::cout << "EQ low " << eqLow << " dB\n";
             continue;
         }
-        if (cmd == "em" && readFloat(eqMid, -18.0f, 18.0f)) {
+        if (cmd == "em" && rd(eqMid, -18.0f, 18.0f)) {
+            enable(*app, kEq, "EQ");
             app->graph.setParameter(kEq, dsp::EqualizerEffect::kMidGainDb, eqMid);
             std::cout << "EQ mid " << eqMid << " dB\n";
             continue;
         }
-        if (cmd == "eh" && readFloat(eqHigh, -18.0f, 18.0f)) {
+        if (cmd == "eh" && rd(eqHigh, -18.0f, 18.0f)) {
+            enable(*app, kEq, "EQ");
             app->graph.setParameter(kEq, dsp::EqualizerEffect::kHighGainDb, eqHigh);
             std::cout << "EQ high " << eqHigh << " dB\n";
             continue;
         }
-        if (cmd == "ap" && readFloat(ampPre, 0.0f, 10.0f)) {
+        if (cmd == "ap" && rd(ampPre, 0.0f, 10.0f)) {
+            enable(*app, kAmp, "Amp");
             app->graph.setParameter(kAmp, dsp::AmpSimEffect::kPreGain, ampPre);
             std::cout << "Amp pre " << ampPre << "\n";
             continue;
         }
-        if (cmd == "ad" && readFloat(ampDrive, 1.0f, 25.0f)) {
+        if (cmd == "ad" && rd(ampDrive, 1.0f, 25.0f)) {
+            enable(*app, kAmp, "Amp");
             app->graph.setParameter(kAmp, dsp::AmpSimEffect::kDrive, ampDrive);
             std::cout << "Amp drive " << ampDrive << "\n";
             continue;
         }
-        if (cmd == "am" && readFloat(ampMaster, 0.0f, 2.0f)) {
+        if (cmd == "am" && rd(ampMaster, 0.0f, 2.0f)) {
+            enable(*app, kAmp, "Amp");
             app->graph.setParameter(kAmp, dsp::AmpSimEffect::kMaster, ampMaster);
             std::cout << "Amp master " << ampMaster << "\n";
             continue;
         }
-        if (cmd == "ab" && readFloat(ampBass, -12.0f, 12.0f)) {
+        if (cmd == "ab" && rd(ampBass, -12.0f, 12.0f)) {
+            enable(*app, kAmp, "Amp");
             app->graph.setParameter(kAmp, dsp::AmpSimEffect::kBassDb, ampBass);
-            std::cout << "Amp bass " << ampBass << " dB\n";
+            std::cout << "Amp bass " << ampBass << "\n";
             continue;
         }
-        if (cmd == "ami" && readFloat(ampMid, -12.0f, 12.0f)) {
+        if (cmd == "ami" && rd(ampMid, -12.0f, 12.0f)) {
+            enable(*app, kAmp, "Amp");
             app->graph.setParameter(kAmp, dsp::AmpSimEffect::kMidDb, ampMid);
-            std::cout << "Amp mid " << ampMid << " dB\n";
+            std::cout << "Amp mid " << ampMid << "\n";
             continue;
         }
-        if (cmd == "at" && readFloat(ampTreble, -12.0f, 12.0f)) {
+        if (cmd == "at" && rd(ampTreble, -12.0f, 12.0f)) {
+            enable(*app, kAmp, "Amp");
             app->graph.setParameter(kAmp, dsp::AmpSimEffect::kTrebleDb, ampTreble);
-            std::cout << "Amp treble " << ampTreble << " dB\n";
+            std::cout << "Amp treble " << ampTreble << "\n";
             continue;
         }
-        if (cmd == "apr" && readFloat(ampPresence, -12.0f, 12.0f)) {
+        if (cmd == "apr" && rd(ampPresence, -12.0f, 12.0f)) {
+            enable(*app, kAmp, "Amp");
             app->graph.setParameter(kAmp, dsp::AmpSimEffect::kPresenceDb, ampPresence);
-            std::cout << "Amp presence " << ampPresence << " dB\n";
+            std::cout << "Amp presence " << ampPresence << "\n";
             continue;
         }
-        if (cmd == "cx" && readFloat(cabMix, 0.0f, 1.0f)) {
+        if (cmd == "cx" && rd(cabMix, 0.0f, 1.0f)) {
+            enable(*app, kCab, "Cab");
             app->graph.setParameter(kCab, dsp::CabinetEffect::kMix, cabMix);
             std::cout << "Cab mix " << cabMix << "\n";
+            continue;
+        }
+        if (cmd == "chr" && rd(chRate, 0.05f, 5.0f)) {
+            enable(*app, kChorus, "Chorus");
+            app->graph.setParameter(kChorus, dsp::ChorusEffect::kRateHz, chRate);
+            if (chMix < 0.05f) {
+                chMix = 0.5f;
+                app->graph.setParameter(kChorus, dsp::ChorusEffect::kMix, chMix);
+            }
+            std::cout << "Chorus rate " << chRate << " Hz\n";
+            continue;
+        }
+        if (cmd == "chd" && rd(chDepth, 0.5f, 12.0f)) {
+            enable(*app, kChorus, "Chorus");
+            app->graph.setParameter(kChorus, dsp::ChorusEffect::kDepthMs, chDepth);
+            if (chMix < 0.05f) {
+                chMix = 0.5f;
+                app->graph.setParameter(kChorus, dsp::ChorusEffect::kMix, chMix);
+            }
+            std::cout << "Chorus depth " << chDepth << " ms\n";
+            continue;
+        }
+        if (cmd == "chm" && rd(chMix, 0.0f, 1.0f)) {
+            enable(*app, kChorus, "Chorus");
+            app->graph.setParameter(kChorus, dsp::ChorusEffect::kMix, chMix);
+            std::cout << "Chorus mix " << chMix << "\n";
+            continue;
+        }
+        if (cmd == "dt" && rd(delTime, 1.0f, 2000.0f)) {
+            enable(*app, kDelay, "Delay");
+            app->graph.setParameter(kDelay, dsp::DelayEffect::kTimeMs, delTime);
+            if (delMix < 0.05f) {
+                delMix = 0.35f;
+                app->graph.setParameter(kDelay, dsp::DelayEffect::kMix, delMix);
+            }
+            std::cout << "Delay time " << delTime << " ms\n";
+            continue;
+        }
+        if (cmd == "df" && rd(delFb, 0.0f, 0.95f)) {
+            enable(*app, kDelay, "Delay");
+            app->graph.setParameter(kDelay, dsp::DelayEffect::kFeedback, delFb);
+            if (delMix < 0.05f) {
+                delMix = 0.35f;
+                app->graph.setParameter(kDelay, dsp::DelayEffect::kMix, delMix);
+            }
+            std::cout << "Delay feedback " << delFb << "\n";
+            continue;
+        }
+        if (cmd == "dx" && rd(delMix, 0.0f, 1.0f)) {
+            enable(*app, kDelay, "Delay");
+            app->graph.setParameter(kDelay, dsp::DelayEffect::kMix, delMix);
+            std::cout << "Delay mix " << delMix << "\n";
+            continue;
+        }
+        if (cmd == "rr" && rd(revRoom, 0.0f, 1.0f)) {
+            enable(*app, kReverb, "Reverb");
+            app->graph.setParameter(kReverb, dsp::ReverbEffect::kRoomSize, revRoom);
+            if (revMix < 0.05f) {
+                revMix = 0.3f;
+                app->graph.setParameter(kReverb, dsp::ReverbEffect::kMix, revMix);
+            }
+            std::cout << "Reverb room " << revRoom << "\n";
+            continue;
+        }
+        if (cmd == "rd" && rd(revDamp, 0.0f, 1.0f)) {
+            enable(*app, kReverb, "Reverb");
+            app->graph.setParameter(kReverb, dsp::ReverbEffect::kDamping, revDamp);
+            if (revMix < 0.05f) {
+                revMix = 0.3f;
+                app->graph.setParameter(kReverb, dsp::ReverbEffect::kMix, revMix);
+            }
+            std::cout << "Reverb damping " << revDamp << "\n";
+            continue;
+        }
+        if (cmd == "rx" && rd(revMix, 0.0f, 1.0f)) {
+            enable(*app, kReverb, "Reverb");
+            app->graph.setParameter(kReverb, dsp::ReverbEffect::kMix, revMix);
+            std::cout << "Reverb mix " << revMix << "\n";
             continue;
         }
         if (cmd == "g" || cmd == "gain") {
@@ -376,16 +507,22 @@ int main()
             }
             v = std::clamp(v, 0.0f, 2.0f);
             gainValue.store(v);
+            enable(*app, kGain, nullptr);
             app->graph.setParameter(kGain, dsp::GainEffect::kGain, v);
-            std::cout << "Gain " << v << " (smoothed)\n";
+            std::cout << "Gain " << v << "\n";
             continue;
         }
         if (cmd == "s") {
-            std::cout << "eq L/M/H=" << eqLow << "/" << eqMid << "/" << eqHigh
-                      << " amp pre/drive/master=" << ampPre << "/" << ampDrive << "/" << ampMaster
-                      << " cabMix=" << cabMix << " gain=" << gainValue.load()
-                      << " xruns in/out=" << engine.inputOverflowCount() << "/"
-                      << engine.outputUnderflowCount() << "\n";
+            std::cout << "enabled:";
+            const char* names[] = {"gate", "comp", "drive", "eq", "amp", "cab",
+                                   "chorus", "delay", "reverb", "gain"};
+            for (int i = 0; i < kNumSlots; ++i) {
+                if (!app->bypassed[static_cast<std::size_t>(i)]) {
+                    std::cout << " " << names[i];
+                }
+            }
+            std::cout << " | chMix=" << chMix << " delMix=" << delMix << " revMix=" << revMix
+                      << " cabMix=" << cabMix << " gain=" << gainValue.load() << "\n";
             continue;
         }
 

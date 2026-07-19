@@ -7,9 +7,9 @@ namespace dsp {
 
 OverdriveEffect::OverdriveEffect()
 {
-    drive_.reset(4.0f);
-    mix_.reset(1.0f);
-    output_.reset(0.7f);
+    drive_.reset(1.0f);
+    mix_.reset(0.0f); // fully dry until the user raises mix/drive
+    output_.reset(1.0f);
 }
 
 void OverdriveEffect::prepare(const double sampleRate, int /*maxBlockSize*/)

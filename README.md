@@ -12,28 +12,20 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-## Zipper fix (Phase 3 follow-up)
+## Clean start (important)
 
-Gain smoothing is now **exponential (one-pole)** with an **~80 ms** time constant (was linear ~20 ms). Rapid `a` automation should glide without ticks.
+The app starts as **clean wire-through** (all color FX bypassed).  
+Editing a parameter **auto-enables** that effect. Type `clean` to mute them all again.
 
-Re-check live: hold a note → type `a` → level pumps smoothly, no zipper.
+## Phase 6 — Chorus / Delay / Reverb
 
-## Phase 5 — EQ / Amp / Cab (success check)
-
-Chain: **Gate → Comp → Drive → EQ → Amp → Cab(IR) → Gain**
+Chain: **Gate → Comp → Drive → EQ → Amp → Cab → Chorus → Delay → Reverb → Gain**
 
 ### Automated
 
 ```bash
-ctest --test-dir build --output-on-failure -R "equalizer|amp_sim|cabinet|gain_smoothing"
+ctest --test-dir build --output-on-failure -R "delay|chorus|reverb"
 ```
-
-| Test | Proves |
-|------|--------|
-| `equalizer_test` | Mid +12 dB boost measurable at 1 kHz |
-| `amp_sim_test` | Pre-EQ → waveshape → tone stack produces saturated output |
-| `cabinet_test` | Impulse through partitioned FFT conv ≈ loaded IR; cab processes tone |
-| `gain_smoothing_test` | Rapid gain flips stay below zipper threshold |
 
 ### Live guitar
 
@@ -41,16 +33,15 @@ ctest --test-dir build --output-on-failure -R "equalizer|amp_sim|cabinet|gain_sm
 ./build/src/guitar_dsp_platform
 ```
 
-1. Play — should sound like amp+cab, not just raw distortion.
-2. Bypass cab: `bb` — tone gets harsher/fizzier (IR removed).
-3. Bypass amp: `ba` — cleaner/less amp-like.
-4. Tweak EQ: `el 4`, `em -3`, `eh 3`.
-5. Amp: `ad 8`, `am 0.7`, `ab 3`.
-6. Cab mix: `cx 0` (dry) vs `cx 1` (full IR).
-7. Zipper check: hold note → `a`.
+1. Play — should sound like dry guitar (clean).
+2. Delay: `dx 0.4` then `dt 400`
+3. Chorus: `chm 0.5` then `chr 1.2`
+4. Reverb: `rx 0.35` then `rr 0.7`
+5. Amp/cab: `ad 6`, `cx 1`
+6. `clean` — back to dry wire
 
-Type `h` for commands.
+Type `h` for all commands.
 
 ## Status
 
-Phase 5 — EQ, amp sim, cabinet IR convolution (ready to test).
+Phase 6 — time-based effects (ready to test). Starts clean.

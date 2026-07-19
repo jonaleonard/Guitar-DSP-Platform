@@ -4,7 +4,10 @@ add_library(guitar_dsp_audio
     dsp/AmpSimEffect.cpp
     dsp/Biquad.cpp
     dsp/CabinetEffect.cpp
+    dsp/ChorusEffect.cpp
     dsp/CompressorEffect.cpp
+    dsp/DelayEffect.cpp
+    dsp/DelayLine.cpp
     dsp/EffectGraph.cpp
     dsp/EqualizerEffect.cpp
     dsp/Fft.cpp
@@ -13,6 +16,7 @@ add_library(guitar_dsp_audio
     dsp/NoiseGateEffect.cpp
     dsp/OverdriveEffect.cpp
     dsp/PartitionedConvolver.cpp
+    dsp/ReverbEffect.cpp
     dsp/SmoothedValue.cpp
     dsp/SyntheticIr.cpp
     dsp/WavFile.cpp

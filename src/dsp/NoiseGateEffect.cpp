@@ -9,7 +9,7 @@ namespace dsp {
 
 NoiseGateEffect::NoiseGateEffect()
 {
-    thresholdDb_.reset(-40.0f);
+    thresholdDb_.reset(-80.0f); // effectively open
     attackMs_.reset(2.0f);
     releaseMs_.reset(80.0f);
     rangeDb_.reset(-80.0f);

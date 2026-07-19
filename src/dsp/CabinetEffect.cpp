@@ -9,7 +9,7 @@ namespace dsp {
 
 CabinetEffect::CabinetEffect()
 {
-    mix_.reset(1.0f);
+    mix_.reset(0.0f); // dry until user raises cab mix
     level_.reset(1.0f);
 }
 

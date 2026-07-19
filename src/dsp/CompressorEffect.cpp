@@ -9,8 +9,8 @@ namespace dsp {
 
 CompressorEffect::CompressorEffect()
 {
-    thresholdDb_.reset(-20.0f);
-    ratio_.reset(4.0f);
+    thresholdDb_.reset(0.0f); // above typical guitar peaks → no reduction
+    ratio_.reset(1.0f);       // 1:1 = bypass
     attackMs_.reset(10.0f);
     releaseMs_.reset(100.0f);
     makeupDb_.reset(0.0f);
