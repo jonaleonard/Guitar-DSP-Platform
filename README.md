@@ -12,36 +12,35 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-## Clean start (important)
+## Phase 7 — Presets (easy switching)
 
-The app starts as **clean wire-through** (all color FX bypassed).  
-Editing a parameter **auto-enables** that effect. Type `clean` to mute them all again.
+Starts on **Clean** (dry wire). Soft-mute crossfade on every preset change (no clicks).
 
-## Phase 6 — Chorus / Delay / Reverb
-
-Chain: **Gate → Comp → Drive → EQ → Amp → Cab → Chorus → Delay → Reverb → Gain**
-
-### Automated
-
-```bash
-ctest --test-dir build --output-on-failure -R "delay|chorus|reverb"
-```
-
-### Live guitar
+### Live guitar — switch presets while playing
 
 ```bash
 ./build/src/guitar_dsp_platform
 ```
 
-1. Play — should sound like dry guitar (clean).
-2. Delay: `dx 0.4` then `dt 400`
-3. Chorus: `chm 0.5` then `chr 1.2`
-4. Reverb: `rx 0.35` then `rr 0.7`
-5. Amp/cab: `ad 6`, `cx 1`
-6. `clean` — back to dry wire
+| Command | Action |
+|---------|--------|
+| `p` | list presets |
+| `p 0` … `p 4` | load by index |
+| `p blues` | load by name |
+| `n` or `]` | **next** preset |
+| `b` or `[` | **previous** preset |
+| `clean` | jump to Clean |
 
-Type `h` for all commands.
+Factory presets: **Clean → Blues → Crunch → Metal → Ambient**
+
+JSON copies are written to `presets/*.json` at startup (editable).
+
+### Automated
+
+```bash
+ctest --test-dir build --output-on-failure -R preset
+```
 
 ## Status
 
-Phase 6 — time-based effects (ready to test). Starts clean.
+Phase 7 — preset system (ready to test).

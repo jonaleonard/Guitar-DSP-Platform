@@ -20,6 +20,7 @@ add_library(guitar_dsp_audio
     dsp/SmoothedValue.cpp
     dsp/SyntheticIr.cpp
     dsp/WavFile.cpp
+    preset/Preset.cpp
 )
 
 target_include_directories(guitar_dsp_audio
