@@ -4,6 +4,7 @@ add_library(guitar_dsp_audio
     dsp/EffectGraph.cpp
     dsp/GainEffect.cpp
     dsp/GraphCommandQueue.cpp
+    dsp/SmoothedValue.cpp
 )
 
 target_include_directories(guitar_dsp_audio

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "dsp/Effect.h"
+#include "dsp/SmoothedValue.h"
 
 namespace dsp {
 
@@ -16,10 +17,14 @@ public:
     void process(float* buffer, int numFrames) override;
     void setParameter(int paramId, float value) override;
 
-    float gain() const { return gain_; }
+    // Current (possibly mid-ramp) gain heard by the audio thread.
+    float gain() const { return gain_.getCurrent(); }
+    float gainTarget() const { return gain_.getTarget(); }
+
+    void setRampTimeMs(float rampTimeMs);
 
 private:
-    float gain_ = 1.0f;
+    SmoothedValue gain_;
 };
 
 } // namespace dsp

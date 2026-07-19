@@ -4,11 +4,16 @@
 
 namespace dsp {
 
-GainEffect::GainEffect() = default;
-
-void GainEffect::prepare(double /*sampleRate*/, int /*maxBlockSize*/)
+GainEffect::GainEffect()
 {
-    // Stateless gain — nothing to allocate or reset.
+    gain_.reset(1.0f);
+}
+
+void GainEffect::prepare(const double sampleRate, int /*maxBlockSize*/)
+{
+    const float current = gain_.getCurrent();
+    gain_.prepare(sampleRate, SmoothedValue::kDefaultRampTimeMs);
+    gain_.reset(current);
 }
 
 void GainEffect::process(float* buffer, const int numFrames)
@@ -17,17 +22,21 @@ void GainEffect::process(float* buffer, const int numFrames)
         return;
     }
 
-    const float gain = gain_;
     for (int i = 0; i < numFrames; ++i) {
-        buffer[i] *= gain;
+        buffer[i] *= gain_.getNext();
     }
 }
 
 void GainEffect::setParameter(const int paramId, const float value)
 {
     if (paramId == kGain) {
-        gain_ = std::max(0.0f, value);
+        gain_.setTarget(std::max(0.0f, value));
     }
+}
+
+void GainEffect::setRampTimeMs(const float rampTimeMs)
+{
+    gain_.setRampTimeMs(rampTimeMs);
 }
 
 } // namespace dsp

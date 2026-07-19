@@ -27,6 +27,7 @@ void printHelp()
 {
     std::cout << "\nCommands (type then Enter):\n"
               << "  g <value>   set gain (0.0 .. 2.0), e.g. g 0.5\n"
+              << "  a           Phase 3 check: rapid gain 0↔1 every 10ms for 5s\n"
               << "  b           toggle bypass on the Gain effect\n"
               << "  s           print status (gain, bypass, xruns)\n"
               << "  h           help\n"
@@ -125,14 +126,15 @@ int main()
               << latencyMs << " ms)\n";
     std::cout << "Input channels: " << engine.inputChannels()
               << ", output channels: " << engine.outputChannels() << "\n";
-    std::cout << "Phase 2: guitar → Gain graph → Mac speakers (default output).\n";
-    std::cout << "Tip: if you hear crackling, try headphones into the Volt "
-                 "(set preferSameDeviceOutput=true) or raise bufferFrames.\n";
+    std::cout << "Phase 3: smoothed Gain — guitar → graph → Mac speakers.\n";
+    std::cout << "Tip: type 'a' while holding a note to verify no zipper clicks.\n";
+    std::cout << "If crackling (I/O), raise bufferFrames or use Volt headphones.\n";
 
     printHelp();
 
     bool bypassed = false;
-    float gainValue = 1.0f;
+    std::atomic<float> gainValue{1.0f};
+    std::atomic<bool> automationRunning{false};
 
     // Periodic xrun / reclaim reporter on a low-priority side thread.
     std::thread statusThread([app, &engine]() {
@@ -170,6 +172,37 @@ int main()
             continue;
         }
 
+        if (cmd == "a" || cmd == "auto" || cmd == "automate") {
+            if (automationRunning.exchange(true)) {
+                std::cout << "Automation already running.\n";
+                continue;
+            }
+
+            std::cout << "Rapid gain automation 0↔1 every 10ms for 5 seconds...\n"
+                      << "Hold a sustained note / chord and listen for zipper clicks "
+                         "(should be none).\n";
+
+            std::thread([app, &automationRunning, &gainValue]() {
+                constexpr auto kInterval = std::chrono::milliseconds(10);
+                constexpr auto kDuration = std::chrono::seconds(5);
+                const auto start = std::chrono::steady_clock::now();
+                float value = 0.0f;
+
+                while (std::chrono::steady_clock::now() - start < kDuration) {
+                    value = (value < 0.5f) ? 1.0f : 0.0f;
+                    gainValue.store(value, std::memory_order_relaxed);
+                    app->graph.setParameter(kGainSlot, dsp::GainEffect::kGain, value);
+                    std::this_thread::sleep_for(kInterval);
+                }
+
+                gainValue.store(1.0f, std::memory_order_relaxed);
+                app->graph.setParameter(kGainSlot, dsp::GainEffect::kGain, 1.0f);
+                automationRunning.store(false);
+                std::cout << "Automation done. Gain restored to 1.0\n";
+            }).detach();
+            continue;
+        }
+
         if (cmd == "b" || cmd == "bypass") {
             bypassed = !bypassed;
             if (!app->graph.setBypassed(kGainSlot, bypassed)) {
@@ -181,7 +214,7 @@ int main()
         }
 
         if (cmd == "g" || cmd == "gain") {
-            float value = gainValue;
+            float value = gainValue.load(std::memory_order_relaxed);
             if (!(iss >> value)) {
                 std::cerr << "Usage: g <0.0..2.0>\n";
                 continue;
@@ -192,17 +225,18 @@ int main()
             if (value > 2.0f) {
                 value = 2.0f;
             }
-            gainValue = value;
-            if (!app->graph.setParameter(kGainSlot, dsp::GainEffect::kGain, gainValue)) {
+            gainValue.store(value, std::memory_order_relaxed);
+            if (!app->graph.setParameter(kGainSlot, dsp::GainEffect::kGain, value)) {
                 std::cerr << "Failed to queue gain command.\n";
                 continue;
             }
-            std::cout << "Gain set to " << gainValue << "\n";
+            std::cout << "Gain set to " << value << " (smoothed ~20ms)\n";
             continue;
         }
 
         if (cmd == "s" || cmd == "status") {
-            std::cout << "gain=" << gainValue << " bypass=" << (bypassed ? "on" : "off")
+            std::cout << "gain=" << gainValue.load(std::memory_order_relaxed)
+                      << " bypass=" << (bypassed ? "on" : "off")
                       << " effects=" << app->graph.size()
                       << " overflows=" << engine.inputOverflowCount()
                       << " underflows=" << engine.outputUnderflowCount() << "\n";

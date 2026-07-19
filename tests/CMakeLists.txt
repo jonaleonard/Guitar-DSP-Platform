@@ -35,3 +35,22 @@ add_test(
     NAME gain_graph_test
     COMMAND gain_graph_test "${CMAKE_BINARY_DIR}/gain_graph.wav"
 )
+
+add_executable(gain_smoothing_test
+    gain_smoothing_test.cpp
+)
+
+target_include_directories(gain_smoothing_test
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(gain_smoothing_test
+    PRIVATE
+        guitar_dsp_audio
+)
+
+add_test(
+    NAME gain_smoothing_test
+    COMMAND gain_smoothing_test "${CMAKE_BINARY_DIR}/gain_smooth.wav"
+)

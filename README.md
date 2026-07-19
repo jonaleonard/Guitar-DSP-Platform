@@ -21,33 +21,48 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-## Phase 2 — live Gain graph (guitar check)
+## Phase 3 — parameter smoothing (success check)
 
-1. In **Audio MIDI Setup**, set the Volt to **48 kHz** (match the app’s 48 kHz).
-2. Guitar → Volt input; monitoring goes to **MacBook speakers** (system default output).
-3. Run:
+Gain changes are linearly ramped (~20 ms) via shared `SmoothedValue` — no zipper clicks.
+
+### Automated check (no guitar)
+
+```bash
+ctest --test-dir build --output-on-failure -R gain_smoothing
+# or:
+./build/tests/gain_smoothing_test build/gain_smooth.wav
+```
+
+This flips gain 0↔1 every 10 ms for 1 s and fails if sample-to-sample jumps look like zipper noise.
+
+### Live guitar check
+
+1. Volt at **48 kHz** in Audio MIDI Setup; guitar → Volt; Mac speakers for monitor.
+2. Run:
 
 ```bash
 ./build/src/guitar_dsp_platform
 ```
 
-4. Success check:
-   - Hear guitar from the Mac speakers through the Gain effect
-   - `g 0.3` lowers level, `g 1.0` restores
-   - `b` toggles bypass (dry vs gained) with no crash
-   - Watch for `[xrun]` lines — should stay at 0 if I/O is stable
+3. Hold a sustained note/chord, then type:
 
-Commands: `g <0..2>`, `b`, `s`, `h`, `q`
+```text
+a
+```
 
-Cross-device I/O (Volt in → Mac speakers out) can crackle. If it does, raise `bufferFrames` to `1024` in `src/main.cpp`, or temporarily set `preferSameDeviceOutput = true` and use Volt headphones.
+4. For 5 seconds gain flips 0↔1 every 10 ms. **Pass:** level pulses smoothly, **no tick/zipper/click** on each flip. (Volume will pump — that’s expected.)
+5. Optional: `g 0` / `g 1` manually — transitions should be smooth, not stepped.
+
+Commands: `g <0..2>`, `a`, `b`, `s`, `h`, `q`
 
 ## Offline harnesses
 
 ```bash
 ./build/tests/sine_to_wav_test build/sine_wire.wav
 ./build/tests/gain_graph_test build/gain_graph.wav
+./build/tests/gain_smoothing_test build/gain_smooth.wav
 ```
 
 ## Status
 
-Phase 2 — effect interface & modular graph (ready to test).
+Phase 3 — parameter smoothing (ready to test).

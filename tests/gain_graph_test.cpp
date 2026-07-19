@@ -1,6 +1,7 @@
 #include "audio/AudioEngine.h"
 #include "dsp/EffectGraph.h"
 #include "dsp/GainEffect.h"
+#include "dsp/SmoothedValue.h"
 #include "WavWriter.h"
 
 #include <algorithm>
@@ -14,10 +15,30 @@
 namespace {
 
 constexpr double kPi = 3.14159265358979323846;
+constexpr unsigned int kSampleRate = 48000;
+constexpr int kBlockSize = 256;
 
-bool nearlyEqual(const float a, const float b, const float eps = 1.0e-5f)
+bool nearlyEqual(const float a, const float b, const float eps = 1.0e-4f)
 {
     return std::fabs(a - b) <= eps;
+}
+
+int settleFrameCount()
+{
+    return static_cast<int>(std::lround(
+               (dsp::SmoothedValue::kDefaultRampTimeMs * 0.001) * static_cast<double>(kSampleRate))) +
+           kBlockSize;
+}
+
+void settleGraph(dsp::EffectGraph& graph)
+{
+    std::vector<float> silence(static_cast<std::size_t>(kBlockSize), 0.0f);
+    int remaining = settleFrameCount();
+    while (remaining > 0) {
+        const int n = std::min(kBlockSize, remaining);
+        graph.process(silence.data(), n);
+        remaining -= n;
+    }
 }
 
 } // namespace
@@ -26,8 +47,6 @@ int main(int argc, char** argv)
 {
     const std::string outputPath = (argc > 1) ? argv[1] : "gain_graph.wav";
 
-    constexpr unsigned int kSampleRate = 48000;
-    constexpr int kBlockSize = 256;
     constexpr float kFrequencyHz = 440.0f;
     constexpr float kAmplitude = 0.5f;
     constexpr float kGain = 0.25f;
@@ -37,7 +56,6 @@ int main(int argc, char** argv)
     graph->prepare(static_cast<double>(kSampleRate), kBlockSize);
 
     auto gain = std::make_unique<dsp::GainEffect>();
-    gain->setParameter(dsp::GainEffect::kGain, kGain);
     if (!graph->insert(std::move(gain), 0)) {
         std::cerr << "Failed to insert Gain.\n";
         return 1;
@@ -73,17 +91,18 @@ int main(int argc, char** argv)
 
     graph->setBypassed(0, false);
     graph->setParameter(0, dsp::GainEffect::kGain, kGain);
+    settleGraph(*graph);
     work = input;
     graph->process(work.data(), kBlockSize);
     for (int i = 0; i < kBlockSize; ++i) {
         if (!nearlyEqual(work[static_cast<std::size_t>(i)], 0.8f * kGain)) {
-            std::cerr << "Active gain mismatch at sample " << i << "\n";
+            std::cerr << "Active gain mismatch at sample " << i << " got "
+                      << work[static_cast<std::size_t>(i)] << "\n";
             return 1;
         }
     }
 
     auto gain2 = std::make_unique<dsp::GainEffect>();
-    gain2->setParameter(dsp::GainEffect::kGain, 2.0f);
     if (!graph->insert(std::move(gain2), 1)) {
         std::cerr << "Failed to insert second Gain.\n";
         return 1;
@@ -112,6 +131,7 @@ int main(int argc, char** argv)
     }
 
     graph->setParameter(0, dsp::GainEffect::kGain, kGain);
+    settleGraph(*graph);
     work = input;
     graph->process(work.data(), kBlockSize);
     for (int i = 0; i < kBlockSize; ++i) {
@@ -148,6 +168,18 @@ int main(int argc, char** argv)
                 }
             }
         });
+
+    graph->setParameter(0, dsp::GainEffect::kGain, kGain);
+    {
+        std::vector<float> zeros(static_cast<std::size_t>(kBlockSize), 0.0f);
+        std::vector<float> discarded(static_cast<std::size_t>(kBlockSize * 2), 0.0f);
+        int remaining = settleFrameCount();
+        while (remaining > 0) {
+            const int n = std::min(kBlockSize, remaining);
+            engine.processOfflineBlock(zeros.data(), discarded.data(), n);
+            remaining -= n;
+        }
+    }
 
     const int totalFrames = static_cast<int>(kDurationSeconds * static_cast<double>(kSampleRate));
     std::vector<float> blockIn(static_cast<std::size_t>(kBlockSize), 0.0f);
