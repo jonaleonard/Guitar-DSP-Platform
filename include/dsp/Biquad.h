@@ -7,7 +7,8 @@ namespace dsp {
 enum class BiquadType {
     LowShelf,
     HighShelf,
-    Peak
+    Peak,
+    LowPass
 };
 
 struct BiquadCoeffs {

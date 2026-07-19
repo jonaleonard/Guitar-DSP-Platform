@@ -84,18 +84,18 @@ int main()
         return 1;
     }
     graph.flushCommands();
-    // Clean: only gain enabled
+    // Clean: smooth chain (comp/eq/amp/cab/gain) — no grit FX
     int enabled = 0;
     for (bool b : bypass) {
         if (!b) {
             ++enabled;
         }
     }
-    if (enabled != 1 || bypass[9]) {
-        std::cerr << "Clean should enable only Gain\n";
+    if (enabled < 4 || bypass[1] || bypass[4] || bypass[9]) {
+        std::cerr << "Clean should enable Comp/Amp/Gain (smooth clean chain)\n";
         return 1;
     }
-    std::cout << "PASS: Clean applies with only Gain active\n";
+    std::cout << "PASS: Clean applies smooth chain\n";
 
     if (!bank.apply(*bank.at(3), graph, bypass)) {
         std::cerr << "Failed to apply Metal\n";

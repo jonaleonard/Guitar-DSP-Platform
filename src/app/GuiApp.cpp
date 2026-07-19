@@ -1,5 +1,7 @@
 #include "app/AppContext.h"
 
+#include "dsp/Fft.h"
+
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
@@ -7,11 +9,15 @@
 #include <GLFW/glfw3.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <string>
+#include <vector>
 
 namespace app {
 namespace {
+
+constexpr int kFftSize = 1024;
 
 bool slotEnabled(AppContext& ctx, const int slot)
 {
@@ -53,6 +59,125 @@ void drawEffectPanel(AppContext& ctx, const int slot, const char* title, Body&& 
     }
 }
 
+void drawVisualizer(AppContext& ctx,
+                    dsp::Fft& fft,
+                    std::vector<float>& wave,
+                    std::vector<float>& real,
+                    std::vector<float>& imag,
+                    std::vector<float>& mags,
+                    float& clipGlow)
+{
+    wave.resize(static_cast<std::size_t>(kFftSize));
+    real.resize(static_cast<std::size_t>(kFftSize));
+    imag.resize(static_cast<std::size_t>(kFftSize));
+    mags.resize(static_cast<std::size_t>(kFftSize / 2));
+
+    ctx.vizRing.snapshotLatest(wave.data(), static_cast<std::size_t>(kFftSize));
+    if (ctx.vizRing.exchangeClipFlag()) {
+        clipGlow = 1.0f;
+    }
+    clipGlow = std::max(0.0f, clipGlow - ImGui::GetIO().DeltaTime * 1.8f);
+    const float peak = ctx.vizRing.exchangePeak();
+
+    if (ImGui::BeginTable("viz", 2, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted("Waveform");
+        ImGui::PlotLines("##wave",
+                         wave.data(),
+                         kFftSize,
+                         0,
+                         nullptr,
+                         -1.0f,
+                         1.0f,
+                         ImVec2(-1, 90));
+
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted("Spectrum");
+        for (int i = 0; i < kFftSize; ++i) {
+            const float w =
+                0.5f - 0.5f * std::cos(2.0f * 3.14159265f * static_cast<float>(i) /
+                                       static_cast<float>(kFftSize - 1));
+            real[static_cast<std::size_t>(i)] = wave[static_cast<std::size_t>(i)] * w;
+            imag[static_cast<std::size_t>(i)] = 0.0f;
+        }
+        fft.forward(real.data(), imag.data());
+        float maxDb = -120.0f;
+        for (int i = 0; i < kFftSize / 2; ++i) {
+            const float re = real[static_cast<std::size_t>(i)];
+            const float im = imag[static_cast<std::size_t>(i)];
+            const float mag = std::sqrt(re * re + im * im) / static_cast<float>(kFftSize);
+            const float db = 20.0f * std::log10(std::max(1.0e-8f, mag));
+            mags[static_cast<std::size_t>(i)] = db;
+            maxDb = std::max(maxDb, db);
+        }
+        ImGui::PlotLines("##spec",
+                         mags.data(),
+                         kFftSize / 2,
+                         0,
+                         nullptr,
+                         -90.0f,
+                         0.0f,
+                         ImVec2(-1, 90));
+        ImGui::EndTable();
+    }
+
+    const ImVec4 clipColor = clipGlow > 0.05f
+                                 ? ImVec4(0.95f, 0.2f + 0.3f * (1.0f - clipGlow), 0.15f, 1.0f)
+                                 : ImVec4(0.35f, 0.75f, 0.35f, 1.0f);
+    ImGui::TextColored(clipColor,
+                       clipGlow > 0.05f ? "CLIP" : "OK  ");
+    ImGui::SameLine();
+    ImGui::Text("Peak: %.0f%%", std::min(200.0f, peak * 100.0f));
+}
+
+void drawProfiler(AppContext& ctx)
+{
+    const double sr = ctx.sampleRate;
+    const unsigned frames = ctx.engine != nullptr ? ctx.engine->bufferFrames() : 0;
+    const double budgetUs = sr > 0.0 ? (1.0e6 * static_cast<double>(frames) / sr) : 1.0;
+    const double totalUs =
+        static_cast<double>(ctx.graph.totalAvgNanos()) / 1000.0;
+    const double totalPct = budgetUs > 0.0 ? (100.0 * totalUs / budgetUs) : 0.0;
+
+    if (ImGui::BeginTable("profiler",
+                          4,
+                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("Effect");
+        ImGui::TableSetupColumn("µs");
+        ImGui::TableSetupColumn("% budget");
+        ImGui::TableSetupColumn("State");
+        ImGui::TableHeadersRow();
+
+        for (int i = 0; i < kNumSlots; ++i) {
+            const auto& slot = ctx.graph.profileSlot(i);
+            const double us = static_cast<double>(slot.avgNanos.load(std::memory_order_relaxed)) / 1000.0;
+            const double pct = budgetUs > 0.0 ? (100.0 * us / budgetUs) : 0.0;
+            const bool on = slot.processed.load(std::memory_order_relaxed);
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(slotName(i));
+            ImGui::TableNextColumn();
+            ImGui::Text("%.1f", us);
+            ImGui::TableNextColumn();
+            ImGui::Text("%.2f", pct);
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(on ? "active" : "bypass");
+        }
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted("TOTAL");
+        ImGui::TableNextColumn();
+        ImGui::Text("%.1f", totalUs);
+        ImGui::TableNextColumn();
+        ImGui::Text("%.2f", totalPct);
+        ImGui::TableNextColumn();
+        ImGui::Text("%.0f µs budget", budgetUs);
+        ImGui::EndTable();
+    }
+}
+
 } // namespace
 
 int runGui(AppContext& ctx)
@@ -69,7 +194,7 @@ int runGui(AppContext& ctx)
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 
-    GLFWwindow* window = glfwCreateWindow(980, 760, "Guitar DSP Platform", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(1100, 860, "Guitar DSP Platform", nullptr, nullptr);
     if (window == nullptr) {
         std::fprintf(stderr, "Failed to create GLFW window.\n");
         glfwTerminate();
@@ -87,6 +212,13 @@ int runGui(AppContext& ctx)
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 150");
 
+    dsp::Fft fft(kFftSize);
+    std::vector<float> wave;
+    std::vector<float> real;
+    std::vector<float> imag;
+    std::vector<float> mags;
+    float clipGlow = 0.0f;
+
     while (!glfwWindowShouldClose(window) && ctx.running.load()) {
         glfwPollEvents();
 
@@ -102,10 +234,9 @@ int runGui(AppContext& ctx)
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                          ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
-        ImGui::TextUnformatted("Guitar DSP Platform — Phase 8");
+        ImGui::TextUnformatted("Guitar DSP Platform — Phases 8–10");
         ImGui::Separator();
 
-        // Latency / load readout
         const double sr = ctx.sampleRate;
         const unsigned frames = ctx.engine != nullptr ? ctx.engine->bufferFrames() : 0;
         const double latencyMs = sr > 0.0 ? (1000.0 * static_cast<double>(frames) / sr) : 0.0;
@@ -171,6 +302,14 @@ int runGui(AppContext& ctx)
         }
 
         ImGui::Separator();
+        if (ImGui::CollapsingHeader("Visualizer (Phase 9)", ImGuiTreeNodeFlags_DefaultOpen)) {
+            drawVisualizer(ctx, fft, wave, real, imag, mags, clipGlow);
+        }
+        if (ImGui::CollapsingHeader("Profiler (Phase 10)", ImGuiTreeNodeFlags_DefaultOpen)) {
+            drawProfiler(ctx);
+        }
+
+        ImGui::Separator();
         ImGui::BeginChild("effects", ImVec2(0, 0), ImGuiChildFlags_None);
 
         drawEffectPanel(ctx, kGate, "Noise Gate", [&] {
@@ -188,7 +327,7 @@ int runGui(AppContext& ctx)
         });
 
         drawEffectPanel(ctx, kDrive, "Overdrive", [&] {
-            sliderFloat(ctx, kDrive, "Drive", &ctx.ui.drive, 1.f, 40.f);
+            sliderFloat(ctx, kDrive, "Drive", &ctx.ui.drive, 1.f, 25.f);
             sliderFloat(ctx, kDrive, "Mix", &ctx.ui.driveMix, 0.f, 1.f);
             sliderFloat(ctx, kDrive, "Output", &ctx.ui.driveOut, 0.f, 2.f);
         });
@@ -203,11 +342,11 @@ int runGui(AppContext& ctx)
 
         drawEffectPanel(ctx, kAmp, "Amp Sim", [&] {
             sliderFloat(ctx, kAmp, "Pre Gain", &ctx.ui.ampPre, 0.1f, 10.f);
-            sliderFloat(ctx, kAmp, "Drive", &ctx.ui.ampDrive, 1.f, 40.f);
-            sliderFloat(ctx, kAmp, "Bass (dB)", &ctx.ui.ampBass, -18.f, 18.f, "%.1f");
-            sliderFloat(ctx, kAmp, "Mid (dB)", &ctx.ui.ampMid, -18.f, 18.f, "%.1f");
-            sliderFloat(ctx, kAmp, "Treble (dB)", &ctx.ui.ampTreble, -18.f, 18.f, "%.1f");
-            sliderFloat(ctx, kAmp, "Presence (dB)", &ctx.ui.ampPresence, -18.f, 18.f, "%.1f");
+            sliderFloat(ctx, kAmp, "Drive", &ctx.ui.ampDrive, 1.f, 25.f);
+            sliderFloat(ctx, kAmp, "Bass (dB)", &ctx.ui.ampBass, -12.f, 12.f, "%.1f");
+            sliderFloat(ctx, kAmp, "Mid (dB)", &ctx.ui.ampMid, -12.f, 12.f, "%.1f");
+            sliderFloat(ctx, kAmp, "Treble (dB)", &ctx.ui.ampTreble, -12.f, 12.f, "%.1f");
+            sliderFloat(ctx, kAmp, "Presence (dB)", &ctx.ui.ampPresence, -12.f, 12.f, "%.1f");
             sliderFloat(ctx, kAmp, "Master", &ctx.ui.ampMaster, 0.f, 2.f);
         });
 

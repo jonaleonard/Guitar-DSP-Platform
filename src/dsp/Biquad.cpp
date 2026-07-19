@@ -73,6 +73,15 @@ BiquadCoeffs Biquad::design(const BiquadType type,
         a2 = 1.0 - alpha / A;
         break;
     }
+    case BiquadType::LowPass: {
+        b0 = (1.0 - cosw) * 0.5;
+        b1 = 1.0 - cosw;
+        b2 = (1.0 - cosw) * 0.5;
+        a0 = 1.0 + alpha;
+        a1 = -2.0 * cosw;
+        a2 = 1.0 - alpha;
+        break;
+    }
     }
 
     BiquadCoeffs c;

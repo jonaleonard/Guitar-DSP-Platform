@@ -127,7 +127,14 @@ bool setupAudioGraph(AppContext& ctx)
 
             for (int i = 0; i < frames; ++i) {
                 const float g = raw->mute.nextGain();
-                const float s = raw->mono[static_cast<std::size_t>(i)] * g;
+                float s = raw->mono[static_cast<std::size_t>(i)] * g;
+                // Soft ceiling — prevents DAC clip squeal without hard digital clipping.
+                if (s > 0.95f) {
+                    s = 0.95f + 0.05f * std::tanh((s - 0.95f) * 8.0f);
+                } else if (s < -0.95f) {
+                    s = -0.95f - 0.05f * std::tanh((-s - 0.95f) * 8.0f);
+                }
+                raw->mono[static_cast<std::size_t>(i)] = s;
                 if (outputChannels == 1) {
                     output[i] = s;
                 } else {
@@ -138,6 +145,8 @@ bool setupAudioGraph(AppContext& ctx)
                     }
                 }
             }
+
+            raw->vizRing.write(raw->mono.data(), frames);
 
             const auto us = std::chrono::duration_cast<std::chrono::microseconds>(
                                 std::chrono::steady_clock::now() - t0)

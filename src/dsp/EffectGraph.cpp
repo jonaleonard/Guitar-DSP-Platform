@@ -1,5 +1,6 @@
 #include "dsp/EffectGraph.h"
 
+#include <chrono>
 #include <utility>
 
 namespace dsp {
@@ -117,14 +118,80 @@ void EffectGraph::process(float* buffer, const int numFrames)
         return;
     }
 
+    const bool profile = profilingEnabled_.load(std::memory_order_relaxed);
+    const auto tTotal0 = profile ? std::chrono::steady_clock::now()
+                                 : std::chrono::steady_clock::time_point{};
+
     const int count = activeCount_.load(std::memory_order_relaxed);
     for (int i = 0; i < count; ++i) {
         Effect* effect = active_[static_cast<std::size_t>(i)];
+        EffectProfileSlot& slot = profile_[static_cast<std::size_t>(i)];
+
         if (effect == nullptr || effect->isBypassed()) {
+            if (profile) {
+                slot.lastNanos.store(0, std::memory_order_relaxed);
+                slot.processed.store(false, std::memory_order_relaxed);
+            }
             continue;
         }
+
+        if (!profile) {
+            effect->process(buffer, numFrames);
+            continue;
+        }
+
+        const auto t0 = std::chrono::steady_clock::now();
         effect->process(buffer, numFrames);
+        const auto nanos = static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0)
+                .count());
+
+        slot.lastNanos.store(nanos, std::memory_order_relaxed);
+        slot.processed.store(true, std::memory_order_relaxed);
+        const std::uint64_t prev = slot.avgNanos.load(std::memory_order_relaxed);
+        const std::uint64_t ema = prev == 0 ? nanos : (prev * 7 + nanos) / 8;
+        slot.avgNanos.store(ema, std::memory_order_relaxed);
     }
+
+    if (profile) {
+        const auto totalNanos = static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() -
+                                                                tTotal0)
+                .count());
+        totalLastNanos_.store(totalNanos, std::memory_order_relaxed);
+        const std::uint64_t prev = totalAvgNanos_.load(std::memory_order_relaxed);
+        const std::uint64_t ema = prev == 0 ? totalNanos : (prev * 7 + totalNanos) / 8;
+        totalAvgNanos_.store(ema, std::memory_order_relaxed);
+    }
+}
+
+const EffectProfileSlot& EffectGraph::profileSlot(const int index) const
+{
+    static const EffectProfileSlot kEmpty{};
+    if (index < 0 || index >= kMaxEffects) {
+        return kEmpty;
+    }
+    return profile_[static_cast<std::size_t>(index)];
+}
+
+std::uint64_t EffectGraph::totalAvgNanos() const
+{
+    return totalAvgNanos_.load(std::memory_order_relaxed);
+}
+
+std::uint64_t EffectGraph::totalLastNanos() const
+{
+    return totalLastNanos_.load(std::memory_order_relaxed);
+}
+
+void EffectGraph::setProfilingEnabled(const bool enabled)
+{
+    profilingEnabled_.store(enabled, std::memory_order_relaxed);
+}
+
+bool EffectGraph::profilingEnabled() const
+{
+    return profilingEnabled_.load(std::memory_order_relaxed);
 }
 
 void EffectGraph::reclaimRetiredEffects()

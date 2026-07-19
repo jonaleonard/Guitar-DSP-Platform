@@ -6,7 +6,7 @@
 
 namespace dsp {
 
-// Simple amp sim: pre-EQ → tanh stages → tone stack → master.
+// Simple amp sim: pre-EQ → tanh stages → anti-squeal LP → tone stack → master.
 class AmpSimEffect final : public Effect {
 public:
     enum Parameter : int {
@@ -40,6 +40,7 @@ private:
 
     Biquad preLow_;
     Biquad preHigh_;
+    Biquad postDriveLp_;
     Biquad toneLow_;
     Biquad toneMid_;
     Biquad toneHigh_;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio/AudioEngine.h"
+#include "audio/AudioRingBuffer.h"
 #include "dsp/EffectGraph.h"
 #include "preset/Preset.h"
 
@@ -26,6 +27,34 @@ enum Slot : int {
     kReverb = 8,
     kGain = 9
 };
+
+inline const char* slotName(const int slot)
+{
+    switch (slot) {
+    case kGate:
+        return "Gate";
+    case kComp:
+        return "Comp";
+    case kDrive:
+        return "Drive";
+    case kEq:
+        return "EQ";
+    case kAmp:
+        return "Amp";
+    case kCab:
+        return "Cab";
+    case kChorus:
+        return "Chorus";
+    case kDelay:
+        return "Delay";
+    case kReverb:
+        return "Reverb";
+    case kGain:
+        return "Gain";
+    default:
+        return "?";
+    }
+}
 
 // Mirrored UI / control-thread parameter snapshot (not read on the audio thread).
 struct UiState {
@@ -89,6 +118,7 @@ struct AppContext {
     preset::SoftMute mute;
     UiState ui{};
     EngineMetrics metrics{};
+    audio::AudioRingBuffer vizRing{};
     std::array<float, kMaxBlockFrames> mono{};
     std::atomic<bool> running{true};
     std::atomic<bool> presetBusy{false};
@@ -102,13 +132,8 @@ void syncUiFromPreset(AppContext& ctx, const preset::Preset& preset);
 bool loadPresetAsync(AppContext& ctx, int index);
 void setSlotBypassed(AppContext& ctx, int slot, bool bypassed);
 void enableSlot(AppContext& ctx, int slot);
-
-// Push current UI values for one slot into the graph (control thread).
 void pushSlotParams(AppContext& ctx, int slot);
-
-// Snapshot UI + bypass into a Preset for JSON save.
 preset::Preset captureCurrentPreset(const AppContext& ctx, const std::string& name);
-
 int runGui(AppContext& ctx);
 
 } // namespace app

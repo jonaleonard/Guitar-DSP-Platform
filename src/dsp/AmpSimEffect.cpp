@@ -32,14 +32,17 @@ void AmpSimEffect::prepare(const double sampleRate, int /*maxBlockSize*/)
 
     preLow_.reset();
     preHigh_.reset();
+    postDriveLp_.reset();
     toneLow_.reset();
     toneMid_.reset();
     toneHigh_.reset();
     presence_.reset();
 
-    // Flat pre-EQ by default (no baked-in scoop).
+    // Mild pre emphasis only — keep flat to avoid baked-in harshness.
     preLow_.setCoefficients(Biquad::design(BiquadType::LowShelf, sampleRate_, 100.0f, 0.7f, 0.0f));
     preHigh_.setCoefficients(Biquad::design(BiquadType::HighShelf, sampleRate_, 5000.0f, 0.7f, 0.0f));
+    // Soft speaker-ish roll-off after clip stages — kills whistle without muffling mids.
+    postDriveLp_.setCoefficients(Biquad::design(BiquadType::LowPass, sampleRate_, 7500.0f, 0.707f, 0.0f));
     updateTone();
 }
 
@@ -81,7 +84,7 @@ void AmpSimEffect::updateTone()
     toneHigh_.setCoefficients(
         Biquad::design(BiquadType::HighShelf, sampleRate_, 3500.0f, 0.7f, trebleDb_.getCurrent()));
     presence_.setCoefficients(
-        Biquad::design(BiquadType::HighShelf, sampleRate_, 4500.0f, 0.7f, presenceDb_.getCurrent()));
+        Biquad::design(BiquadType::HighShelf, sampleRate_, 4200.0f, 0.7f, presenceDb_.getCurrent()));
 }
 
 void AmpSimEffect::process(float* buffer, const int numFrames)
@@ -109,9 +112,10 @@ void AmpSimEffect::process(float* buffer, const int numFrames)
         x = preHigh_.process(x);
         x *= preGain;
 
-        // Two soft stages for a bit more amp-like saturation.
+        // Primary soft clip + lighter second stage (less fuzz / less squeal).
         x = OverdriveEffect::waveshape(x, drive);
-        x = OverdriveEffect::waveshape(x, std::max(1.0f, drive * 0.5f));
+        x = OverdriveEffect::waveshape(x, std::max(1.0f, 1.0f + (drive - 1.0f) * 0.25f));
+        x = postDriveLp_.process(x);
 
         x = toneLow_.process(x);
         x = toneMid_.process(x);

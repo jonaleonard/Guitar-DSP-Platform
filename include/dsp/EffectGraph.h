@@ -6,9 +6,17 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 
 namespace dsp {
+
+// Per-slot timing snapshot published by the audio thread for the GUI (Phase 10).
+struct EffectProfileSlot {
+    std::atomic<std::uint64_t> lastNanos{0};
+    std::atomic<std::uint64_t> avgNanos{0}; // EMA
+    std::atomic<bool> processed{false};    // false when bypassed/empty this block
+};
 
 // Ordered effect chain. Graph topology mutations go through GraphCommandQueue and are
 // applied at the start of process() on the audio thread (no vector realloc / no delete there).
@@ -44,6 +52,13 @@ public:
     int size() const;
     Effect* effectAt(int index) const;
 
+    // Phase 10 profiler (GUI thread reads atomics).
+    const EffectProfileSlot& profileSlot(int index) const;
+    std::uint64_t totalAvgNanos() const;
+    std::uint64_t totalLastNanos() const;
+    void setProfilingEnabled(bool enabled);
+    bool profilingEnabled() const;
+
 private:
     void applyCommands();
     bool applyInsert(Effect* effect, int index);
@@ -66,6 +81,11 @@ private:
     double sampleRate_ = 48000.0;
     int maxBlockSize_ = 512;
     bool prepared_ = false;
+
+    std::array<EffectProfileSlot, kMaxEffects> profile_{};
+    std::atomic<std::uint64_t> totalLastNanos_{0};
+    std::atomic<std::uint64_t> totalAvgNanos_{0};
+    std::atomic<bool> profilingEnabled_{true};
 };
 
 } // namespace dsp
