@@ -23,8 +23,8 @@ ctest --test-dir build --output-on-failure
 
 ## Phase 2 — live Gain graph (guitar check)
 
-1. In **Audio MIDI Setup**, set the Volt to **48 kHz**.
-2. Prefer **headphones plugged into the Volt** (same-device I/O — avoids cross-device crackle).
+1. In **Audio MIDI Setup**, set the Volt to **48 kHz** (match the app’s 48 kHz).
+2. Guitar → Volt input; monitoring goes to **MacBook speakers** (system default output).
 3. Run:
 
 ```bash
@@ -32,14 +32,14 @@ ctest --test-dir build --output-on-failure
 ```
 
 4. Success check:
-   - Hear guitar through the Gain effect
+   - Hear guitar from the Mac speakers through the Gain effect
    - `g 0.3` lowers level, `g 1.0` restores
    - `b` toggles bypass (dry vs gained) with no crash
    - Watch for `[xrun]` lines — should stay at 0 if I/O is stable
 
 Commands: `g <0..2>`, `b`, `s`, `h`, `q`
 
-If you still hear crackling with headphones on the Volt, try buffer `1024` in `src/main.cpp` (`config.bufferFrames`).
+Cross-device I/O (Volt in → Mac speakers out) can crackle. If it does, raise `bufferFrames` to `1024` in `src/main.cpp`, or temporarily set `preferSameDeviceOutput = true` and use Volt headphones.
 
 ## Offline harnesses
 

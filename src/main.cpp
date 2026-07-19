@@ -44,7 +44,8 @@ int main()
     config.inputChannels = 1;
     config.outputChannels = 2;
     config.minimizeLatency = false;
-    config.preferSameDeviceOutput = true;
+    // Volt for guitar input; MacBook speakers (system default) for monitoring.
+    config.preferSameDeviceOutput = false;
     config.useDefaultOutputDevice = true;
     config.scheduleRealtime = true;
 
@@ -124,8 +125,9 @@ int main()
               << latencyMs << " ms)\n";
     std::cout << "Input channels: " << engine.inputChannels()
               << ", output channels: " << engine.outputChannels() << "\n";
-    std::cout << "Phase 2: guitar → Gain graph → monitors.\n";
-    std::cout << "Tip: plug headphones into the Volt for cleanest (same-device) I/O.\n";
+    std::cout << "Phase 2: guitar → Gain graph → Mac speakers (default output).\n";
+    std::cout << "Tip: if you hear crackling, try headphones into the Volt "
+                 "(set preferSameDeviceOutput=true) or raise bufferFrames.\n";
 
     printHelp();
 
