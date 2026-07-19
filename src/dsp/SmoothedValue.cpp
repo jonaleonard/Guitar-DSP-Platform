@@ -4,94 +4,73 @@
 #include <cmath>
 
 namespace dsp {
+namespace {
+
+constexpr float kSnapEpsilon = 1.0e-7f;
+
+} // namespace
 
 void SmoothedValue::prepare(const double sampleRate, const float rampTimeMs)
 {
     sampleRate_ = std::max(1.0, sampleRate);
     setRampTimeMs(rampTimeMs);
-    // Keep current value; recompute any in-flight ramp for the new rate.
-    if (remainingSamples_ > 0) {
-        recomputeStep();
-    }
 }
 
 void SmoothedValue::setRampTimeMs(const float rampTimeMs)
 {
     rampTimeMs_ = std::max(0.0f, rampTimeMs);
-    if (remainingSamples_ > 0) {
-        recomputeStep();
-    }
+    updateCoeff();
 }
 
 void SmoothedValue::reset(const float value)
 {
     current_ = value;
     target_ = value;
-    step_ = 0.0f;
-    remainingSamples_ = 0;
 }
 
 void SmoothedValue::setTarget(const float target)
 {
     target_ = target;
-
-    if (rampTimeMs_ <= 0.0f || sampleRate_ <= 0.0) {
-        current_ = target_;
-        step_ = 0.0f;
-        remainingSamples_ = 0;
-        return;
-    }
-
-    if (std::fabs(target_ - current_) < 1.0e-8f) {
-        current_ = target_;
-        step_ = 0.0f;
-        remainingSamples_ = 0;
-        return;
-    }
-
-    recomputeStep();
 }
 
 float SmoothedValue::getNext()
 {
-    if (remainingSamples_ <= 0) {
+    if (rampTimeMs_ <= 0.0f || coeff_ <= 0.0f) {
         current_ = target_;
         return current_;
     }
 
-    current_ += step_;
-    --remainingSamples_;
+    current_ = coeff_ * current_ + (1.0f - coeff_) * target_;
 
-    if (remainingSamples_ <= 0) {
+    if (std::fabs(current_ - target_) < kSnapEpsilon) {
         current_ = target_;
-        step_ = 0.0f;
-        remainingSamples_ = 0;
     }
 
     return current_;
 }
 
-int SmoothedValue::rampSamples() const
+bool SmoothedValue::isSmoothing() const
 {
+    return std::fabs(current_ - target_) >= kSnapEpsilon;
+}
+
+int SmoothedValue::settleSamples() const
+{
+    // ~6.9 time-constants ≈ 60 dB of settling for a one-pole.
     if (rampTimeMs_ <= 0.0f || sampleRate_ <= 0.0) {
         return 0;
     }
-
-    return std::max(1, static_cast<int>(std::lround((rampTimeMs_ * 0.001) * sampleRate_)));
+    return std::max(1, static_cast<int>(std::lround(6.9 * (rampTimeMs_ * 0.001) * sampleRate_)));
 }
 
-void SmoothedValue::recomputeStep()
+void SmoothedValue::updateCoeff()
 {
-    const int samples = rampSamples();
-    if (samples <= 0) {
-        current_ = target_;
-        step_ = 0.0f;
-        remainingSamples_ = 0;
+    if (rampTimeMs_ <= 0.0f || sampleRate_ <= 0.0) {
+        coeff_ = 0.0f;
         return;
     }
 
-    remainingSamples_ = samples;
-    step_ = (target_ - current_) / static_cast<float>(samples);
+    coeff_ = std::exp(-1.0f / (rampTimeMs_ * 0.001f * static_cast<float>(sampleRate_)));
 }
 
 } // namespace dsp

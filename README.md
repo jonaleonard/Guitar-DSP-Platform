@@ -12,35 +12,45 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-## Phase 4 — Gate / Comp / Overdrive (success check)
+## Zipper fix (Phase 3 follow-up)
 
-Chain: **NoiseGate → Compressor → Overdrive → Gain**
+Gain smoothing is now **exponential (one-pole)** with an **~80 ms** time constant (was linear ~20 ms). Rapid `a` automation should glide without ticks.
 
-### Automated (required — measures math, not vibes)
+Re-check live: hold a note → type `a` → level pumps smoothly, no zipper.
+
+## Phase 5 — EQ / Amp / Cab (success check)
+
+Chain: **Gate → Comp → Drive → EQ → Amp → Cab(IR) → Gain**
+
+### Automated
 
 ```bash
-ctest --test-dir build --output-on-failure -R "noise_gate|compressor|overdrive"
+ctest --test-dir build --output-on-failure -R "equalizer|amp_sim|cabinet|gain_smoothing"
 ```
 
-| Test | What it proves |
-|------|----------------|
-| `noise_gate_test` | Loud signal passes; hum below threshold is attenuated; loud→quiet closes |
-| `compressor_test` | Steady-state gain matches peak hard-knee formula; makeup scales; below thresh ≈ unity |
-| `overdrive_test` | Odd waveshape; high-drive saturation; mix dry/wet; peak reduction |
+| Test | Proves |
+|------|--------|
+| `equalizer_test` | Mid +12 dB boost measurable at 1 kHz |
+| `amp_sim_test` | Pre-EQ → waveshape → tone stack produces saturated output |
+| `cabinet_test` | Impulse through partitioned FFT conv ≈ loaded IR; cab processes tone |
+| `gain_smoothing_test` | Rapid gain flips stay below zipper threshold |
 
-### Live guitar check
+### Live guitar
 
 ```bash
 ./build/src/guitar_dsp_platform
 ```
 
-1. Play muted strings / noise floor — gate should quiet hum (`gt -45` etc.).
-2. Dig in hard — compressor should even dynamics (`ct -18`, `cr 4`, `cm 3`).
-3. Raise drive — hear soft clipping (`d 8`, `dm 1`).
-4. Bypass each stage: `bg` / `bc` / `bd` / `bn`.
+1. Play — should sound like amp+cab, not just raw distortion.
+2. Bypass cab: `bb` — tone gets harsher/fizzier (IR removed).
+3. Bypass amp: `ba` — cleaner/less amp-like.
+4. Tweak EQ: `el 4`, `em -3`, `eh 3`.
+5. Amp: `ad 8`, `am 0.7`, `ab 3`.
+6. Cab mix: `cx 0` (dry) vs `cx 1` (full IR).
+7. Zipper check: hold note → `a`.
 
-Useful commands: `gt`, `ct`, `cr`, `cm`, `d`, `dm`, `g`, `bg`/`bc`/`bd`/`bn`, `s`, `h`, `q`.
+Type `h` for commands.
 
 ## Status
 
-Phase 4 — first real DSP modules (ready to test).
+Phase 5 — EQ, amp sim, cabinet IR convolution (ready to test).

@@ -4,6 +4,10 @@
 
 namespace dsp {
 
+namespace {
+constexpr float kGainRampTimeMs = 80.0f; // longer glide — kills zipper on rapid 0↔1 automation
+} // namespace
+
 GainEffect::GainEffect()
 {
     gain_.reset(1.0f);
@@ -12,7 +16,7 @@ GainEffect::GainEffect()
 void GainEffect::prepare(const double sampleRate, int /*maxBlockSize*/)
 {
     const float current = gain_.getCurrent();
-    gain_.prepare(sampleRate, SmoothedValue::kDefaultRampTimeMs);
+    gain_.prepare(sampleRate, kGainRampTimeMs);
     gain_.reset(current);
 }
 

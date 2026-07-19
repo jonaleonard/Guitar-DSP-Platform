@@ -1,13 +1,21 @@
 add_library(guitar_dsp_audio
     audio/AudioEngine.cpp
     audio/ParameterQueue.cpp
+    dsp/AmpSimEffect.cpp
+    dsp/Biquad.cpp
+    dsp/CabinetEffect.cpp
     dsp/CompressorEffect.cpp
     dsp/EffectGraph.cpp
+    dsp/EqualizerEffect.cpp
+    dsp/Fft.cpp
     dsp/GainEffect.cpp
     dsp/GraphCommandQueue.cpp
     dsp/NoiseGateEffect.cpp
     dsp/OverdriveEffect.cpp
+    dsp/PartitionedConvolver.cpp
     dsp/SmoothedValue.cpp
+    dsp/SyntheticIr.cpp
+    dsp/WavFile.cpp
 )
 
 target_include_directories(guitar_dsp_audio

@@ -25,9 +25,10 @@ bool nearlyEqual(const float a, const float b, const float eps = 1.0e-4f)
 
 int settleFrameCount()
 {
-    return static_cast<int>(std::lround(
-               (dsp::SmoothedValue::kDefaultRampTimeMs * 0.001) * static_cast<double>(kSampleRate))) +
-           kBlockSize;
+    // GainEffect uses an 80 ms exponential ramp — settle well past that.
+    dsp::SmoothedValue s;
+    s.prepare(static_cast<double>(kSampleRate), 80.0f);
+    return s.settleSamples() * 2 + kBlockSize;
 }
 
 void settleGraph(dsp::EffectGraph& graph)

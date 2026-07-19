@@ -2,12 +2,14 @@
 
 namespace dsp {
 
-// Linear parameter ramp for real-time use.
+// One-pole (exponential) parameter smoother for real-time use.
+// Continuous trajectory — no slope discontinuities when the target jumps mid-ramp
+// (linear ramps zipper under rapid automation; exponential does not).
 // setTarget() from the audio thread (via effect setParameter); getNext() per sample.
 // No heap allocation, no locks.
 class SmoothedValue {
 public:
-    static constexpr float kDefaultRampTimeMs = 20.0f;
+    static constexpr float kDefaultRampTimeMs = 50.0f;
 
     SmoothedValue() = default;
 
@@ -18,29 +20,28 @@ public:
     // Snap current and target immediately (no ramp). Use on prepare / init only.
     void reset(float value);
 
-    // Begin a linear ramp from the current value toward target over rampTimeMs.
+    // Glide exponentially toward target with the configured time constant.
     void setTarget(float target);
 
     float getNext();
     float getCurrent() const { return current_; }
     float getTarget() const { return target_; }
-    bool isSmoothing() const { return remainingSamples_ > 0; }
+    bool isSmoothing() const;
 
     float rampTimeMs() const { return rampTimeMs_; }
     double sampleRate() const { return sampleRate_; }
 
-    // Samples needed for a full ramp at the current settings.
-    int rampSamples() const;
+    // Approximate samples to settle within ~60 dB (useful for tests).
+    int settleSamples() const;
 
 private:
-    void recomputeStep();
+    void updateCoeff();
 
     double sampleRate_ = 48000.0;
     float rampTimeMs_ = kDefaultRampTimeMs;
     float current_ = 0.0f;
     float target_ = 0.0f;
-    float step_ = 0.0f;
-    int remainingSamples_ = 0;
+    float coeff_ = 0.0f; // current = coeff*current + (1-coeff)*target
 };
 
 } // namespace dsp

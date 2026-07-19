@@ -12,7 +12,7 @@ constexpr int kBlock = 256;
 
 void settle(dsp::OverdriveEffect& od)
 {
-    std::vector<float> zeros(static_cast<std::size_t>(kSampleRate * 0.05), 0.0f);
+    std::vector<float> zeros(static_cast<std::size_t>(kSampleRate * 0.5), 0.0f);
     for (std::size_t i = 0; i < zeros.size(); i += static_cast<std::size_t>(kBlock)) {
         const int n = static_cast<int>(std::min(zeros.size() - i, static_cast<std::size_t>(kBlock)));
         od.process(zeros.data() + i, n);
