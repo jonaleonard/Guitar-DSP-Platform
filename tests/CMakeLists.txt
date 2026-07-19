@@ -1,56 +1,13 @@
-add_executable(sine_to_wav_test
-    sine_to_wav_test.cpp
-)
+function(add_dsp_test name)
+    add_executable(${name} ${name}.cpp)
+    target_include_directories(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(${name} PRIVATE guitar_dsp_audio)
+    add_test(NAME ${name} COMMAND ${name} ${ARGN})
+endfunction()
 
-target_include_directories(sine_to_wav_test
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-target_link_libraries(sine_to_wav_test
-    PRIVATE
-        guitar_dsp_audio
-)
-
-add_test(
-    NAME sine_to_wav_test
-    COMMAND sine_to_wav_test "${CMAKE_BINARY_DIR}/sine_wire.wav"
-)
-
-add_executable(gain_graph_test
-    gain_graph_test.cpp
-)
-
-target_include_directories(gain_graph_test
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-target_link_libraries(gain_graph_test
-    PRIVATE
-        guitar_dsp_audio
-)
-
-add_test(
-    NAME gain_graph_test
-    COMMAND gain_graph_test "${CMAKE_BINARY_DIR}/gain_graph.wav"
-)
-
-add_executable(gain_smoothing_test
-    gain_smoothing_test.cpp
-)
-
-target_include_directories(gain_smoothing_test
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-target_link_libraries(gain_smoothing_test
-    PRIVATE
-        guitar_dsp_audio
-)
-
-add_test(
-    NAME gain_smoothing_test
-    COMMAND gain_smoothing_test "${CMAKE_BINARY_DIR}/gain_smooth.wav"
-)
+add_dsp_test(sine_to_wav_test "${CMAKE_BINARY_DIR}/sine_wire.wav")
+add_dsp_test(gain_graph_test "${CMAKE_BINARY_DIR}/gain_graph.wav")
+add_dsp_test(gain_smoothing_test "${CMAKE_BINARY_DIR}/gain_smooth.wav")
+add_dsp_test(noise_gate_test)
+add_dsp_test(compressor_test)
+add_dsp_test(overdrive_test)

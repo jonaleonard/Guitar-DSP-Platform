@@ -1,9 +1,12 @@
 add_library(guitar_dsp_audio
     audio/AudioEngine.cpp
     audio/ParameterQueue.cpp
+    dsp/CompressorEffect.cpp
     dsp/EffectGraph.cpp
     dsp/GainEffect.cpp
     dsp/GraphCommandQueue.cpp
+    dsp/NoiseGateEffect.cpp
+    dsp/OverdriveEffect.cpp
     dsp/SmoothedValue.cpp
 )
 
