@@ -9,6 +9,7 @@
 #include "dsp/GainEffect.h"
 #include "dsp/NoiseGateEffect.h"
 #include "dsp/OverdriveEffect.h"
+#include "dsp/PeakLimiter.h"
 #include "dsp/ReverbEffect.h"
 #include "dsp/SyntheticIr.h"
 
@@ -34,7 +35,7 @@ bool setupAudioGraph(AppContext& ctx)
     audio::AudioEngineConfig config;
     config.inputDeviceName = "Volt";
     config.sampleRate = 48000;
-    config.bufferFrames = 128;
+    config.bufferFrames = 64;
     config.inputChannels = 1;
     config.outputChannels = 2;
     config.minimizeLatency = true;
@@ -98,6 +99,7 @@ bool setupAudioGraph(AppContext& ctx)
     ctx.bank.apply(*ctx.bank.at(0), ctx.graph, ctx.ui.bypassed);
     ctx.graph.flushCommands();
     ctx.currentPreset.store(0);
+    ctx.outputLimiter.prepare(ctx.sampleRate, 0.35f, 50.0f);
 
     AppContext* raw = &ctx;
     ctx.engine->setProcessBlockCallback(
@@ -115,31 +117,26 @@ bool setupAudioGraph(AppContext& ctx)
 
             if (inputChannels == 1) {
                 for (int i = 0; i < frames; ++i) {
-                    raw->mono[static_cast<std::size_t>(i)] = input[i];
+                    raw->mono[static_cast<std::size_t>(i)] = input[i] * kInputTrim;
                 }
             } else {
                 for (int i = 0; i < frames; ++i) {
-                    raw->mono[static_cast<std::size_t>(i)] = input[i * inputChannels];
+                    raw->mono[static_cast<std::size_t>(i)] = input[i * inputChannels] * kInputTrim;
                 }
             }
 
             raw->graph.process(raw->mono.data(), frames);
 
-            // Pre-soft-clip buffer for honest metering / viz (matches what the chain produced).
             for (int i = 0; i < frames; ++i) {
                 const float g = raw->mute.nextGain();
                 raw->mono[static_cast<std::size_t>(i)] *= g;
             }
+
+            // Meter pre-limiter (shows chain level); then studio ceiling limiter.
             raw->vizRing.write(raw->mono.data(), frames);
 
             for (int i = 0; i < frames; ++i) {
-                float s = raw->mono[static_cast<std::size_t>(i)];
-                // Soft ceiling — prevents DAC clip squeal without hard digital clipping.
-                if (s > 0.95f) {
-                    s = 0.95f + 0.05f * std::tanh((s - 0.95f) * 8.0f);
-                } else if (s < -0.95f) {
-                    s = -0.95f - 0.05f * std::tanh((-s - 0.95f) * 8.0f);
-                }
+                float s = raw->outputLimiter.process(raw->mono[static_cast<std::size_t>(i)]);
                 if (outputChannels == 1) {
                     output[i] = s;
                 } else {
@@ -165,6 +162,7 @@ bool setupAudioGraph(AppContext& ctx)
 
     ctx.sampleRate = static_cast<double>(ctx.engine->sampleRate());
     ctx.graph.prepare(ctx.sampleRate, static_cast<int>(ctx.engine->bufferFrames()));
+    ctx.outputLimiter.prepare(ctx.sampleRate, 0.35f, 50.0f);
     syncUiFromPreset(ctx, *ctx.bank.at(0));
     ctx.bank.apply(*ctx.bank.at(0), ctx.graph, ctx.ui.bypassed);
 

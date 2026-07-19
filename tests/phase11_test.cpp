@@ -291,7 +291,7 @@ bool testGraphLatency()
     graph.insert(std::make_unique<dsp::GainEffect>(), 9);
     graph.flushCommands();
 
-    // Enable only Gain + Cab (cab is the intentional latency source)
+    // Enable only Gain + Cab (hybrid cab is zero-latency; gain path too).
     for (int i = 0; i < 10; ++i) {
         graph.setBypassed(i, i != 5 && i != 9);
     }
@@ -300,7 +300,6 @@ bool testGraphLatency()
     graph.setParameter(5, dsp::CabinetEffect::kLevel, 1.0f);
     graph.flushCommands();
 
-    // Settle smoothed cab mix/level so wet path is fully engaged before the impulse.
     std::vector<float> warm(static_cast<std::size_t>(kSr * 0.5), 0.0f);
     processAll(graph, warm);
 
@@ -309,25 +308,19 @@ bool testGraphLatency()
     buf[0] = 1.0f;
     processAll(graph, buf);
 
-    // Peak of the IR response lands near the partition latency (not first non-zero —
-    // tiny dry bleed can appear at t=0 while mix finishes smoothing).
-    int peakAt = 0;
-    float peak = 0.0f;
+    // Hybrid cab: first energy should appear immediately (zero algorithmic latency).
+    int first = -1;
     for (int i = 0; i < n; ++i) {
-        const float a = std::fabs(buf[static_cast<std::size_t>(i)]);
-        if (a > peak) {
-            peak = a;
-            peakAt = i;
+        if (std::fabs(buf[static_cast<std::size_t>(i)]) > 1.0e-4f) {
+            first = i;
+            break;
         }
     }
-    const int expected = dsp::PartitionedConvolver::kDefaultPartitionSize;
-    if (peak < 0.01f || peakAt < expected / 2 || peakAt > expected * 4) {
-        std::cerr << "Graph latency unexpected: peakAt=" << peakAt << " peak=" << peak
-                  << " expected~" << expected << "\n";
+    if (first < 0 || first > 2) {
+        std::cerr << "Hybrid cab should be ~zero-latency, first=" << first << "\n";
         return false;
     }
-    std::cout << "PASS: full-graph cab latency peak @ sample " << peakAt
-              << " (partition=" << expected << ", peak=" << peak << ")\n";
+    std::cout << "PASS: hybrid cab zero-latency (first energy @ " << first << ")\n";
 
     // Ensure dry gain-only path has ~0 algorithmic latency
     for (int i = 0; i < 10; ++i) {

@@ -8,15 +8,16 @@ namespace dsp {
 OverdriveEffect::OverdriveEffect()
 {
     drive_.reset(1.0f);
-    mix_.reset(0.0f); // fully dry until the user raises mix/drive
+    mix_.reset(0.0f);
     output_.reset(1.0f);
 }
 
 void OverdriveEffect::prepare(const double sampleRate, int /*maxBlockSize*/)
 {
-    drive_.prepare(sampleRate);
-    mix_.prepare(sampleRate);
-    output_.prepare(sampleRate);
+    // Snappy mix — less unsaturated dry bleed into amp.
+    drive_.prepare(sampleRate, 15.0f);
+    mix_.prepare(sampleRate, 12.0f);
+    output_.prepare(sampleRate, 15.0f);
 }
 
 void OverdriveEffect::setParameter(const int paramId, const float value)
@@ -59,7 +60,11 @@ void OverdriveEffect::process(float* buffer, const int numFrames)
 
         const float dry = buffer[i];
         const float wet = waveshape(dry, drive);
-        buffer[i] = (dry * (1.0f - mix) + wet * mix) * output;
+
+        // Pad unsaturated dry only when it's blended with wet (mix>0) and drive is up —
+        // prevents OD→amp peak explosions without breaking mix=0 dry bypass.
+        const float dryPad = 1.0f / (1.0f + 0.35f * (drive - 1.0f) * mix);
+        buffer[i] = (dry * (1.0f - mix) * dryPad + wet * mix) * output;
     }
 }
 

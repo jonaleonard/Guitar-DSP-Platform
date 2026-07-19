@@ -205,7 +205,9 @@ void drawVisualizer(AppContext& ctx,
     ImGui::TextColored(clipColor, clipGlow > 0.05f ? "CLIP" : (peakHold > 0.85f ? "HOT " : "OK  "));
     ImGui::SameLine();
     ImGui::ProgressBar(std::min(1.0f, peakHold), ImVec2(-1, 0), nullptr);
-    ImGui::Text("Peak hold: %.0f%%  (target ~35–50%% for clean headroom)", peakPct);
+    ImGui::Text("Peak hold: %.0f%% (%.1f dBFS)  — studio target ~-12…-9 dBFS (25–35%%)",
+                peakPct,
+                peakHold > 1.0e-8f ? 20.0f * std::log10(peakHold) : -120.0f);
 }
 
 bool slotEnabled(AppContext& ctx, const int slot)

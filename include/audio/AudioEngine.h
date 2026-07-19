@@ -18,7 +18,7 @@ struct AudioEngineConfig {
     unsigned int inputDeviceId = 0;
     unsigned int outputDeviceId = 0;
     unsigned int sampleRate = 48000;
-    unsigned int bufferFrames = 128;
+    unsigned int bufferFrames = 64;
     unsigned int inputChannels = 1;
     unsigned int outputChannels = 2;
     // Prefer lower latency; AppContext enables minimizeLatency for live use.

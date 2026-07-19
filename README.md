@@ -12,44 +12,41 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-GLFW / Dear ImGui are fetched via CMake `FetchContent` on first configure.
-
 ## Run
 
 ```bash
 ./build/src/guitar_dsp_platform
 ```
 
-Live audio defaults to **128-frame buffers** with `minimizeLatency` enabled (~2.7 ms buffer period @ 48 kHz). Cabinet convolution uses a **128-sample** partition (~2.7 ms algorithmic latency). If you hear xruns, raise the buffer in `AppContext.cpp`.
+### Low-latency audio path
+
+| Stage | Setting |
+|-------|---------|
+| I/O buffer | **64 frames** (~1.3 ms @ 48 kHz) + `minimizeLatency` |
+| Cabinet | **Hybrid zero-latency** convolution (direct FIR head + partitioned FFT tail) |
+| Input trim | **−6 dB** studio pad before the chain |
+| Output | Peak limiter ceiling **≈ −9 dBFS** (0.35 linear) |
+
+If you hear xruns, raise `bufferFrames` in `AppContext.cpp` to 128.
+
+### Studio gain staging
+
+Presets are staged like a tracked guitar part: unsaturated OD dry is padded as drive rises, amp has inter-stage attenuation + soft ceiling, and a final limiter prevents DAC clipping. Aim for peak hold around **−12…−9 dBFS** (25–35%). Turning speaker volume down does not change digital peaks — the limiter/trim do.
 
 ### Presets
 
-Soft-mute crossfade on switch. Gain staging targets ~**35–50% peak hold** (Ambient was the headroom reference):
-
 | Preset | Character |
 |--------|-----------|
-| Clean | Light glue + soft amp/cab |
-| Blues | Mild edge-of-breakup, warm mids |
-| Crunch | Mid-forward rock grind, dry |
-| Metal | Tight boost → amp, moderate scoop, dry |
-| Ambient | Chorus / delay / reverb wash |
+| Clean | Open, smooth amp/cab |
+| Blues | Soft breakup, warm mids |
+| Crunch | Mid-forward rock grind |
+| Metal | Wet boost → tight amp scoop |
+| Ambient | Controlled chorus/delay/reverb wash |
 
-### Visualizer (Phase 9)
+### Phases 9–11
 
-Waveform + log-frequency spectrum drawn from the **same** post-DSP snapshot each frame (time-aligned). Peak hold meter with slow release; CLIP/HOT indicators.
-
-### Profiler (Phase 10)
-
-Per-effect µs / % of buffer budget (EMA) from `EffectGraph`.
-
-### Phase 11 — Automated DSP tests
-
-`phase11_test` covers sine EQ boost, delay/cab impulse, EQ frequency sweep, gate/compressor behavior, and graph latency regression.
-
-```bash
-ctest --test-dir build --output-on-failure -R phase11
-```
+Visualizer (synced wave/spectrum), profiler, and `phase11_test` automated DSP suite.
 
 ## Status
 
-Phases 1–11 complete.
+Phases 1–11 complete — low-latency hybrid cab + studio headroom path.

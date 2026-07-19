@@ -13,7 +13,7 @@ namespace dsp {
 // process() is real-time safe (no alloc).
 class PartitionedConvolver {
 public:
-    static constexpr int kDefaultPartitionSize = 128;
+    static constexpr int kDefaultPartitionSize = 64;
 
     PartitionedConvolver() = default;
 

@@ -112,10 +112,18 @@ void AmpSimEffect::process(float* buffer, const int numFrames)
         x = preHigh_.process(x);
         x *= preGain;
 
-        // Primary soft clip + lighter second stage (less fuzz / less squeal).
+        // Soft clip stages with inter-stage attenuation (studio gain staging).
         x = OverdriveEffect::waveshape(x, drive);
-        x = OverdriveEffect::waveshape(x, std::max(1.0f, 1.0f + (drive - 1.0f) * 0.25f));
+        x *= 0.85f;
+        x = OverdriveEffect::waveshape(x, std::max(1.0f, 1.0f + (drive - 1.0f) * 0.22f));
         x = postDriveLp_.process(x);
+
+        // Soft ceiling before tone stack so EQ/presence can't recreate digital clips.
+        if (x > 0.9f) {
+            x = 0.9f + 0.1f * std::tanh((x - 0.9f) * 4.0f);
+        } else if (x < -0.9f) {
+            x = -0.9f - 0.1f * std::tanh((-x - 0.9f) * 4.0f);
+        }
 
         x = toneLow_.process(x);
         x = toneMid_.process(x);

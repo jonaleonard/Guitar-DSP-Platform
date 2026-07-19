@@ -3,6 +3,7 @@
 #include "audio/AudioEngine.h"
 #include "audio/AudioRingBuffer.h"
 #include "dsp/EffectGraph.h"
+#include "dsp/PeakLimiter.h"
 #include "preset/Preset.h"
 
 #include <array>
@@ -14,6 +15,8 @@ namespace app {
 
 constexpr int kNumSlots = preset::kNumSlots;
 constexpr int kMaxBlockFrames = 4096;
+// Studio input pad (~-6 dB) — keeps hot interfaces from slamming the amp chain.
+constexpr float kInputTrim = 0.5f;
 
 enum Slot : int {
     kGate = 0,
@@ -56,7 +59,6 @@ inline const char* slotName(const int slot)
     }
 }
 
-// Mirrored UI / control-thread parameter snapshot (not read on the audio thread).
 struct UiState {
     std::array<bool, kNumSlots> bypassed{};
 
@@ -116,6 +118,7 @@ struct AppContext {
     dsp::EffectGraph graph;
     preset::PresetBank bank;
     preset::SoftMute mute;
+    dsp::PeakLimiter outputLimiter{};
     UiState ui{};
     EngineMetrics metrics{};
     audio::AudioRingBuffer vizRing{};
