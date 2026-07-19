@@ -12,7 +12,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-GLFW and Dear ImGui are fetched automatically via CMake `FetchContent` on first configure.
+GLFW / Dear ImGui are fetched via CMake `FetchContent` on first configure.
 
 ## Run
 
@@ -20,28 +20,36 @@ GLFW and Dear ImGui are fetched automatically via CMake `FetchContent` on first 
 ./build/src/guitar_dsp_platform
 ```
 
+Live audio defaults to **128-frame buffers** with `minimizeLatency` enabled (~2.7 ms buffer period @ 48 kHz). Cabinet convolution uses a **128-sample** partition (~2.7 ms algorithmic latency). If you hear xruns, raise the buffer in `AppContext.cpp`.
+
 ### Presets
 
-Soft-mute crossfade on every switch. Factory character:
+Soft-mute crossfade on switch. Gain staging targets ~**35–50% peak hold** (Ambient was the headroom reference):
 
-| Preset | Intent |
-|--------|--------|
-| **Clean** | Light glue + soft amp/cab — smooth, no grit |
-| **Blues** | Mild edge-of-breakup, warm mids, tiny room |
-| **Crunch** | Mid-forward rock grind, controlled level, dry |
-| **Metal** | Tight boost → amp, moderate scoop, dry cab |
-| **Ambient** | Chorus/delay/reverb wash with a bit more punch |
+| Preset | Character |
+|--------|-----------|
+| Clean | Light glue + soft amp/cab |
+| Blues | Mild edge-of-breakup, warm mids |
+| Crunch | Mid-forward rock grind, dry |
+| Metal | Tight boost → amp, moderate scoop, dry |
+| Ambient | Chorus / delay / reverb wash |
 
-### Phase 9 — Visualizer
+### Visualizer (Phase 9)
 
-Waveform + spectrum (Hann-windowed FFT on GUI thread) and a decaying clip indicator. Audio thread only writes a lock-free SPSC ring.
+Waveform + log-frequency spectrum drawn from the **same** post-DSP snapshot each frame (time-aligned). Peak hold meter with slow release; CLIP/HOT indicators.
 
-### Phase 10 — Profiler
+### Profiler (Phase 10)
 
-Per-effect µs / % of buffer budget table (EMA), plus total. Timing is taken inside `EffectGraph::process` and published via atomics.
+Per-effect µs / % of buffer budget (EMA) from `EffectGraph`.
 
-All GUI parameter / bypass / preset changes still go only through the lock-free graph command queue.
+### Phase 11 — Automated DSP tests
+
+`phase11_test` covers sine EQ boost, delay/cab impulse, EQ frequency sweep, gate/compressor behavior, and graph latency regression.
+
+```bash
+ctest --test-dir build --output-on-failure -R phase11
+```
 
 ## Status
 
-Phases 8–10 ready to test.
+Phases 1–11 complete.

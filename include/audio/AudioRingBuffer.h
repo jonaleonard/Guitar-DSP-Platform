@@ -3,12 +3,12 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
-#include <cstring>
+#include <algorithm>
 
 namespace audio {
 
 // Lock-free SPSC float ring for audio → GUI visualization (Phase 9).
-// Audio thread: write(). GUI thread: snapshotLatest() / writeIndex().
+// Audio thread: write(). GUI thread: snapshotLatest() / peak/clip atomics.
 class AudioRingBuffer {
 public:
     static constexpr std::size_t kCapacity = 8192; // power of two
@@ -16,27 +16,33 @@ public:
 
     AudioRingBuffer() = default;
 
-    // Audio thread only.
+    // Audio thread only. samples should be pre-soft-clip for honest metering.
     void write(const float* samples, int numFrames)
     {
         if (samples == nullptr || numFrames <= 0) {
             return;
         }
         std::size_t w = writeIndex_.load(std::memory_order_relaxed);
+        float blockPeak = 0.0f;
         for (int i = 0; i < numFrames; ++i) {
             const float s = samples[i];
             data_[w & kMask] = s;
             ++w;
-            if (s > peak_.load(std::memory_order_relaxed)) {
-                peak_.store(s, std::memory_order_relaxed);
-            } else if (-s > peak_.load(std::memory_order_relaxed)) {
-                peak_.store(-s, std::memory_order_relaxed);
+            const float a = s >= 0.0f ? s : -s;
+            if (a > blockPeak) {
+                blockPeak = a;
             }
-            if (s >= 0.98f || s <= -0.98f) {
+            if (a >= 0.95f) {
                 clipFlag_.store(true, std::memory_order_relaxed);
             }
         }
         writeIndex_.store(w, std::memory_order_release);
+
+        // Keep a rolling max the GUI can sample without zeroing every frame.
+        float cur = peak_.load(std::memory_order_relaxed);
+        while (blockPeak > cur &&
+               !peak_.compare_exchange_weak(cur, blockPeak, std::memory_order_relaxed)) {
+        }
     }
 
     std::size_t writeIndex() const
@@ -60,9 +66,13 @@ public:
         }
     }
 
-    float exchangePeak()
+    // GUI: read and decay the peak toward zero (smooth meter, not frame-flash).
+    float samplePeak(float decayTowardZero)
     {
-        return peak_.exchange(0.0f, std::memory_order_relaxed);
+        float cur = peak_.load(std::memory_order_relaxed);
+        const float next = cur * std::max(0.0f, 1.0f - decayTowardZero);
+        peak_.store(next, std::memory_order_relaxed);
+        return cur;
     }
 
     bool exchangeClipFlag()

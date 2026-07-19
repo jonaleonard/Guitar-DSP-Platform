@@ -18,11 +18,11 @@ struct AudioEngineConfig {
     unsigned int inputDeviceId = 0;
     unsigned int outputDeviceId = 0;
     unsigned int sampleRate = 48000;
-    unsigned int bufferFrames = 512;
+    unsigned int bufferFrames = 128;
     unsigned int inputChannels = 1;
     unsigned int outputChannels = 2;
-    // Prefer stability over minimum latency; raise buffer / disable minimize if you hear crackle.
-    bool minimizeLatency = false;
+    // Prefer lower latency; AppContext enables minimizeLatency for live use.
+    bool minimizeLatency = true;
     // Prefer Volt (or named input device) for output when it has outputs — same clock domain.
     bool preferSameDeviceOutput = true;
     bool useDefaultOutputDevice = true;

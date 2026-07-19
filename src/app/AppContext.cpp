@@ -34,10 +34,10 @@ bool setupAudioGraph(AppContext& ctx)
     audio::AudioEngineConfig config;
     config.inputDeviceName = "Volt";
     config.sampleRate = 48000;
-    config.bufferFrames = 512;
+    config.bufferFrames = 128;
     config.inputChannels = 1;
     config.outputChannels = 2;
-    config.minimizeLatency = false;
+    config.minimizeLatency = true;
     config.preferSameDeviceOutput = false;
     config.useDefaultOutputDevice = true;
     config.scheduleRealtime = true;
@@ -74,7 +74,7 @@ bool setupAudioGraph(AppContext& ctx)
     auto eq = std::make_unique<dsp::EqualizerEffect>();
     auto amp = std::make_unique<dsp::AmpSimEffect>();
     auto cab = std::make_unique<dsp::CabinetEffect>();
-    const auto ir = dsp::makeSyntheticCabIr(2048, config.sampleRate);
+    const auto ir = dsp::makeSyntheticCabIr(1024, config.sampleRate);
     if (!cab->loadImpulseResponse(ir.data(), static_cast<int>(ir.size()))) {
         std::cerr << "Failed to load cabinet IR.\n";
         return false;
@@ -125,16 +125,21 @@ bool setupAudioGraph(AppContext& ctx)
 
             raw->graph.process(raw->mono.data(), frames);
 
+            // Pre-soft-clip buffer for honest metering / viz (matches what the chain produced).
             for (int i = 0; i < frames; ++i) {
                 const float g = raw->mute.nextGain();
-                float s = raw->mono[static_cast<std::size_t>(i)] * g;
+                raw->mono[static_cast<std::size_t>(i)] *= g;
+            }
+            raw->vizRing.write(raw->mono.data(), frames);
+
+            for (int i = 0; i < frames; ++i) {
+                float s = raw->mono[static_cast<std::size_t>(i)];
                 // Soft ceiling — prevents DAC clip squeal without hard digital clipping.
                 if (s > 0.95f) {
                     s = 0.95f + 0.05f * std::tanh((s - 0.95f) * 8.0f);
                 } else if (s < -0.95f) {
                     s = -0.95f - 0.05f * std::tanh((-s - 0.95f) * 8.0f);
                 }
-                raw->mono[static_cast<std::size_t>(i)] = s;
                 if (outputChannels == 1) {
                     output[i] = s;
                 } else {
@@ -145,8 +150,6 @@ bool setupAudioGraph(AppContext& ctx)
                     }
                 }
             }
-
-            raw->vizRing.write(raw->mono.data(), frames);
 
             const auto us = std::chrono::duration_cast<std::chrono::microseconds>(
                                 std::chrono::steady_clock::now() - t0)
@@ -167,7 +170,9 @@ bool setupAudioGraph(AppContext& ctx)
 
     std::cout << "Input: " << ctx.engine->inputDeviceName() << "\n";
     std::cout << "Output: " << ctx.engine->outputDeviceName() << "\n";
-    std::cout << "GUI ready — presets retuned for Phase 8.\n";
+    std::cout << "Buffer: " << ctx.engine->bufferFrames() << " @ " << ctx.engine->sampleRate()
+              << " Hz (minimizeLatency on)\n";
+    std::cout << "GUI ready — Phases 8–11.\n";
     return true;
 }
 
