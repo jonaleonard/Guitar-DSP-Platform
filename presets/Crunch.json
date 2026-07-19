@@ -1,0 +1,55 @@
+{
+  "name": "Crunch",
+  "effects": [
+    {
+      "type": "NoiseGate",
+      "bypassed": true,
+      "parameters": {"0": -75, "1": 3, "2": 90, "3": -80}
+    },
+    {
+      "type": "Compressor",
+      "bypassed": false,
+      "parameters": {"0": -22, "1": 1.6, "2": 12, "3": 130, "4": 1}
+    },
+    {
+      "type": "Overdrive",
+      "bypassed": false,
+      "parameters": {"0": 3, "1": 0.7, "2": 0.88}
+    },
+    {
+      "type": "Equalizer",
+      "bypassed": false,
+      "parameters": {"0": 0.5, "5": -0.25, "2": 2, "3": 880, "4": 0.8, "1": 110, "6": 3500}
+    },
+    {
+      "type": "AmpSim",
+      "bypassed": false,
+      "parameters": {"0": 1.4, "1": 3.8, "2": 1, "3": 2, "4": -0.25, "5": -0.5, "6": 0.85}
+    },
+    {
+      "type": "Cabinet",
+      "bypassed": false,
+      "parameters": {"0": 0.98, "1": 1}
+    },
+    {
+      "type": "Chorus",
+      "bypassed": true,
+      "parameters": {"0": 0.8, "1": 3, "2": 0}
+    },
+    {
+      "type": "Delay",
+      "bypassed": true,
+      "parameters": {"0": 300, "1": 0.2, "2": 0}
+    },
+    {
+      "type": "Reverb",
+      "bypassed": true,
+      "parameters": {"0": 0.3, "1": 0.6, "2": 0}
+    },
+    {
+      "type": "Gain",
+      "bypassed": false,
+      "parameters": {"0": 1.1}
+    }
+  ]
+}

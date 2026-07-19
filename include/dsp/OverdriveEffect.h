@@ -1,11 +1,12 @@
 #pragma once
 
+#include "dsp/Biquad.h"
 #include "dsp/Effect.h"
 #include "dsp/SmoothedValue.h"
 
 namespace dsp {
 
-// Soft-clip overdrive via tanh waveshaping.
+// Soft-clip overdrive with Tube Screamer-ish mid focus (tight boost into a high-gain amp).
 class OverdriveEffect final : public Effect {
 public:
     enum Parameter : int {
@@ -26,6 +27,10 @@ private:
     SmoothedValue drive_;
     SmoothedValue mix_;
     SmoothedValue output_;
+    Biquad preHp_;
+    Biquad preLp_;
+    Biquad midBump_;
+    Biquad postLp_;
 };
 
 } // namespace dsp

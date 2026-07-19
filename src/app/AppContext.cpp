@@ -99,7 +99,8 @@ bool setupAudioGraph(AppContext& ctx)
     ctx.bank.apply(*ctx.bank.at(0), ctx.graph, ctx.ui.bypassed);
     ctx.graph.flushCommands();
     ctx.currentPreset.store(0);
-    ctx.outputLimiter.prepare(ctx.sampleRate, 0.35f, 50.0f);
+    // ~-1 dBFS ceiling — loud amp/pedal feel with DAC protection.
+    ctx.outputLimiter.prepare(ctx.sampleRate, 0.89f, 80.0f);
 
     AppContext* raw = &ctx;
     ctx.engine->setProcessBlockCallback(
@@ -132,11 +133,15 @@ bool setupAudioGraph(AppContext& ctx)
                 raw->mono[static_cast<std::size_t>(i)] *= g;
             }
 
-            // Meter pre-limiter (shows chain level); then studio ceiling limiter.
+            // Limit first, then meter — scopes/CLIP reflect what you actually hear / send to DAC.
+            for (int i = 0; i < frames; ++i) {
+                raw->mono[static_cast<std::size_t>(i)] =
+                    raw->outputLimiter.process(raw->mono[static_cast<std::size_t>(i)]);
+            }
             raw->vizRing.write(raw->mono.data(), frames);
 
             for (int i = 0; i < frames; ++i) {
-                float s = raw->outputLimiter.process(raw->mono[static_cast<std::size_t>(i)]);
+                const float s = raw->mono[static_cast<std::size_t>(i)];
                 if (outputChannels == 1) {
                     output[i] = s;
                 } else {
@@ -162,7 +167,7 @@ bool setupAudioGraph(AppContext& ctx)
 
     ctx.sampleRate = static_cast<double>(ctx.engine->sampleRate());
     ctx.graph.prepare(ctx.sampleRate, static_cast<int>(ctx.engine->bufferFrames()));
-    ctx.outputLimiter.prepare(ctx.sampleRate, 0.35f, 50.0f);
+    ctx.outputLimiter.prepare(ctx.sampleRate, 0.89f, 80.0f);
     syncUiFromPreset(ctx, *ctx.bank.at(0));
     ctx.bank.apply(*ctx.bank.at(0), ctx.graph, ctx.ui.bypassed);
 

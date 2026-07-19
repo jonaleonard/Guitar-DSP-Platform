@@ -197,15 +197,16 @@ void drawVisualizer(AppContext& ctx,
         ImGui::EndTable();
     }
 
-    // Peak meter bar
+    // Peak meter — shows post-limiter DAC level (what you hear).
     const float peakPct = std::clamp(peakHold * 100.0f, 0.0f, 150.0f);
+    // HOT near ceiling (~0.89); CLIP only if something actually hit ~0.95.
     const ImVec4 clipColor = clipGlow > 0.05f ? ImVec4(0.95f, 0.25f, 0.15f, 1.0f)
-                                              : (peakHold > 0.85f ? ImVec4(0.95f, 0.75f, 0.2f, 1.0f)
+                                              : (peakHold > 0.82f ? ImVec4(0.95f, 0.75f, 0.2f, 1.0f)
                                                                  : ImVec4(0.35f, 0.8f, 0.4f, 1.0f));
-    ImGui::TextColored(clipColor, clipGlow > 0.05f ? "CLIP" : (peakHold > 0.85f ? "HOT " : "OK  "));
+    ImGui::TextColored(clipColor, clipGlow > 0.05f ? "CLIP" : (peakHold > 0.82f ? "HOT " : "OK  "));
     ImGui::SameLine();
     ImGui::ProgressBar(std::min(1.0f, peakHold), ImVec2(-1, 0), nullptr);
-    ImGui::Text("Peak hold: %.0f%% (%.1f dBFS)  — studio target ~-12…-9 dBFS (25–35%%)",
+    ImGui::Text("Output peak: %.0f%% (%.1f dBFS)  — aim ~-6…-1 dBFS (amp/pedal loud)",
                 peakPct,
                 peakHold > 1.0e-8f ? 20.0f * std::log10(peakHold) : -120.0f);
 }

@@ -1,0 +1,55 @@
+{
+  "name": "Blues",
+  "effects": [
+    {
+      "type": "NoiseGate",
+      "bypassed": true,
+      "parameters": {"0": -75, "1": 5, "2": 120, "3": -80}
+    },
+    {
+      "type": "Compressor",
+      "bypassed": false,
+      "parameters": {"0": -26, "1": 1.45, "2": 22, "3": 180, "4": 1}
+    },
+    {
+      "type": "Overdrive",
+      "bypassed": false,
+      "parameters": {"0": 2.2, "1": 0.6, "2": 0.9}
+    },
+    {
+      "type": "Equalizer",
+      "bypassed": false,
+      "parameters": {"0": 1.5, "5": -0.5, "2": 1.5, "3": 680, "4": 0.65, "1": 110, "6": 3200}
+    },
+    {
+      "type": "AmpSim",
+      "bypassed": false,
+      "parameters": {"0": 1.15, "1": 2.4, "2": 2, "3": 1.5, "4": -0.5, "5": -1, "6": 0.9}
+    },
+    {
+      "type": "Cabinet",
+      "bypassed": false,
+      "parameters": {"0": 0.96, "1": 1}
+    },
+    {
+      "type": "Chorus",
+      "bypassed": true,
+      "parameters": {"0": 0.6, "1": 2.5, "2": 0}
+    },
+    {
+      "type": "Delay",
+      "bypassed": true,
+      "parameters": {"0": 380, "1": 0.2, "2": 0}
+    },
+    {
+      "type": "Reverb",
+      "bypassed": false,
+      "parameters": {"0": 0.22, "1": 0.6, "2": 0.05}
+    },
+    {
+      "type": "Gain",
+      "bypassed": false,
+      "parameters": {"0": 1.1}
+    }
+  ]
+}

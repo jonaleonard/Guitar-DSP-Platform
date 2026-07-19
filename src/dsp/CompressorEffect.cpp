@@ -78,9 +78,19 @@ void CompressorEffect::process(float* buffer, const int numFrames)
         }
 
         float gainDb = 0.0f;
-        if (envelopeDb_ > thresholdDb) {
-            const float excess = envelopeDb_ - thresholdDb;
-            gainDb = -excess * (1.0f - (1.0f / ratio));
+        // Soft knee (~6 dB) — gradual onset, more musical than hard threshold.
+        constexpr float kKneeDb = 6.0f;
+        const float halfKnee = 0.5f * kKneeDb;
+        if (envelopeDb_ > (thresholdDb - halfKnee)) {
+            if (envelopeDb_ < (thresholdDb + halfKnee)) {
+                // Inside knee: quadratic blend into full ratio.
+                const float x = envelopeDb_ - thresholdDb + halfKnee;
+                const float softExcess = (x * x) / (2.0f * kKneeDb);
+                gainDb = -softExcess * (1.0f - (1.0f / ratio));
+            } else {
+                const float excess = envelopeDb_ - thresholdDb;
+                gainDb = -excess * (1.0f - (1.0f / ratio));
+            }
         }
 
         const float targetGainLin = dbToLin(gainDb + makeupDb);

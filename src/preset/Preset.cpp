@@ -192,20 +192,20 @@ Preset makeFactoryClean()
     using R = dsp::ReverbEffect;
     using G = dsp::GainEffect;
 
-    // Studio clean: open, smooth, ~-12 dBFS peaks with input trim.
+    // Amp-loud clean: mic'd cab feel, healthy output level into the limiter.
     Preset p;
     p.name = "Clean";
     p.effects = {
         slot(EffectType::NoiseGate, true, {{NG::kThresholdDb, -80.f}, {NG::kAttackMs, 2.f}, {NG::kReleaseMs, 80.f}, {NG::kRangeDb, -80.f}}),
-        slot(EffectType::Compressor, false, {{C::kThresholdDb, -28.f}, {C::kRatio, 1.4f}, {C::kAttackMs, 20.f}, {C::kReleaseMs, 150.f}, {C::kMakeupDb, 0.0f}}),
+        slot(EffectType::Compressor, false, {{C::kThresholdDb, -24.f}, {C::kRatio, 1.5f}, {C::kAttackMs, 20.f}, {C::kReleaseMs, 160.f}, {C::kMakeupDb, 1.5f}}),
         slot(EffectType::Overdrive, true, {{D::kDrive, 1.f}, {D::kMix, 0.f}, {D::kOutput, 1.f}}),
-        slot(EffectType::Equalizer, false, {{E::kLowGainDb, 0.5f}, {E::kMidGainDb, 0.5f}, {E::kHighGainDb, -0.5f}, {E::kMidFreqHz, 900.f}, {E::kMidQ, 0.7f}, {E::kLowFreqHz, 120.f}, {E::kHighFreqHz, 4500.f}}),
-        slot(EffectType::AmpSim, false, {{A::kPreGain, 1.0f}, {A::kDrive, 1.25f}, {A::kBassDb, 0.5f}, {A::kMidDb, 0.5f}, {A::kTrebleDb, -0.5f}, {A::kPresenceDb, -1.0f}, {A::kMaster, 0.85f}}),
-        slot(EffectType::Cabinet, false, {{Cab::kMix, 0.55f}, {Cab::kLevel, 0.9f}}),
+        slot(EffectType::Equalizer, false, {{E::kLowGainDb, 1.0f}, {E::kMidGainDb, 0.5f}, {E::kHighGainDb, -1.0f}, {E::kMidFreqHz, 850.f}, {E::kMidQ, 0.7f}, {E::kLowFreqHz, 120.f}, {E::kHighFreqHz, 4000.f}}),
+        slot(EffectType::AmpSim, false, {{A::kPreGain, 1.0f}, {A::kDrive, 1.3f}, {A::kBassDb, 1.0f}, {A::kMidDb, 0.5f}, {A::kTrebleDb, -0.5f}, {A::kPresenceDb, -1.5f}, {A::kMaster, 1.0f}}),
+        slot(EffectType::Cabinet, false, {{Cab::kMix, 0.95f}, {Cab::kLevel, 1.0f}}),
         slot(EffectType::Chorus, true, {{Ch::kRateHz, 0.8f}, {Ch::kDepthMs, 3.f}, {Ch::kMix, 0.f}}),
         slot(EffectType::Delay, true, {{Dl::kTimeMs, 350.f}, {Dl::kFeedback, 0.35f}, {Dl::kMix, 0.f}}),
-        slot(EffectType::Reverb, true, {{R::kRoomSize, 0.5f}, {R::kDamping, 0.5f}, {R::kMix, 0.f}}),
-        slot(EffectType::Gain, false, {{G::kGain, 0.85f}}),
+        slot(EffectType::Reverb, false, {{R::kRoomSize, 0.25f}, {R::kDamping, 0.55f}, {R::kMix, 0.06f}}),
+        slot(EffectType::Gain, false, {{G::kGain, 1.15f}}),
     };
     return p;
 }
@@ -223,20 +223,20 @@ Preset makeFactoryBlues()
     using R = dsp::ReverbEffect;
     using G = dsp::GainEffect;
 
-    // Warm blues breakup — OD mostly wet into amp, studio headroom.
+    // Edge-of-breakup blues: warm mids, amp-loud without slamming.
     Preset p;
     p.name = "Blues";
     p.effects = {
         slot(EffectType::NoiseGate, true, {{NG::kThresholdDb, -75.f}, {NG::kAttackMs, 5.f}, {NG::kReleaseMs, 120.f}, {NG::kRangeDb, -80.f}}),
-        slot(EffectType::Compressor, false, {{C::kThresholdDb, -30.f}, {C::kRatio, 1.35f}, {C::kAttackMs, 22.f}, {C::kReleaseMs, 180.f}, {C::kMakeupDb, 0.0f}}),
-        slot(EffectType::Overdrive, false, {{D::kDrive, 2.4f}, {D::kMix, 0.72f}, {D::kOutput, 0.85f}}),
-        slot(EffectType::Equalizer, false, {{E::kLowGainDb, 1.5f}, {E::kMidGainDb, 2.0f}, {E::kHighGainDb, -0.5f}, {E::kMidFreqHz, 700.f}, {E::kMidQ, 0.65f}, {E::kLowFreqHz, 110.f}, {E::kHighFreqHz, 3500.f}}),
-        slot(EffectType::AmpSim, false, {{A::kPreGain, 1.2f}, {A::kDrive, 2.6f}, {A::kBassDb, 2.0f}, {A::kMidDb, 2.0f}, {A::kTrebleDb, -0.5f}, {A::kPresenceDb, -1.0f}, {A::kMaster, 0.7f}}),
-        slot(EffectType::Cabinet, false, {{Cab::kMix, 0.85f}, {Cab::kLevel, 0.85f}}),
+        slot(EffectType::Compressor, false, {{C::kThresholdDb, -26.f}, {C::kRatio, 1.45f}, {C::kAttackMs, 22.f}, {C::kReleaseMs, 180.f}, {C::kMakeupDb, 1.0f}}),
+        slot(EffectType::Overdrive, false, {{D::kDrive, 2.2f}, {D::kMix, 0.6f}, {D::kOutput, 0.9f}}),
+        slot(EffectType::Equalizer, false, {{E::kLowGainDb, 1.5f}, {E::kMidGainDb, 1.5f}, {E::kHighGainDb, -0.5f}, {E::kMidFreqHz, 680.f}, {E::kMidQ, 0.65f}, {E::kLowFreqHz, 110.f}, {E::kHighFreqHz, 3200.f}}),
+        slot(EffectType::AmpSim, false, {{A::kPreGain, 1.15f}, {A::kDrive, 2.4f}, {A::kBassDb, 2.0f}, {A::kMidDb, 1.5f}, {A::kTrebleDb, -0.5f}, {A::kPresenceDb, -1.0f}, {A::kMaster, 0.9f}}),
+        slot(EffectType::Cabinet, false, {{Cab::kMix, 0.96f}, {Cab::kLevel, 1.0f}}),
         slot(EffectType::Chorus, true, {{Ch::kRateHz, 0.6f}, {Ch::kDepthMs, 2.5f}, {Ch::kMix, 0.f}}),
         slot(EffectType::Delay, true, {{Dl::kTimeMs, 380.f}, {Dl::kFeedback, 0.2f}, {Dl::kMix, 0.f}}),
-        slot(EffectType::Reverb, false, {{R::kRoomSize, 0.2f}, {R::kDamping, 0.6f}, {R::kMix, 0.04f}}),
-        slot(EffectType::Gain, false, {{G::kGain, 0.8f}}),
+        slot(EffectType::Reverb, false, {{R::kRoomSize, 0.22f}, {R::kDamping, 0.6f}, {R::kMix, 0.05f}}),
+        slot(EffectType::Gain, false, {{G::kGain, 1.1f}}),
     };
     return p;
 }
@@ -254,20 +254,20 @@ Preset makeFactoryCrunch()
     using R = dsp::ReverbEffect;
     using G = dsp::GainEffect;
 
-    // Classic rock crunch — mid-forward, controlled, dry cab.
+    // Classic rock crunch: mid push, grind that fills headphones.
     Preset p;
     p.name = "Crunch";
     p.effects = {
-        slot(EffectType::NoiseGate, true, {{NG::kThresholdDb, -75.f}, {NG::kAttackMs, 2.f}, {NG::kReleaseMs, 80.f}, {NG::kRangeDb, -80.f}}),
-        slot(EffectType::Compressor, false, {{C::kThresholdDb, -24.f}, {C::kRatio, 1.6f}, {C::kAttackMs, 12.f}, {C::kReleaseMs, 120.f}, {C::kMakeupDb, 0.0f}}),
-        slot(EffectType::Overdrive, false, {{D::kDrive, 3.5f}, {D::kMix, 0.8f}, {D::kOutput, 0.8f}}),
-        slot(EffectType::Equalizer, false, {{E::kLowGainDb, 1.0f}, {E::kMidGainDb, 2.5f}, {E::kHighGainDb, 0.5f}, {E::kMidFreqHz, 900.f}, {E::kMidQ, 0.8f}, {E::kLowFreqHz, 110.f}, {E::kHighFreqHz, 3800.f}}),
-        slot(EffectType::AmpSim, false, {{A::kPreGain, 1.6f}, {A::kDrive, 4.2f}, {A::kBassDb, 1.0f}, {A::kMidDb, 2.5f}, {A::kTrebleDb, 0.5f}, {A::kPresenceDb, 0.0f}, {A::kMaster, 0.58f}}),
-        slot(EffectType::Cabinet, false, {{Cab::kMix, 0.92f}, {Cab::kLevel, 0.82f}}),
+        slot(EffectType::NoiseGate, true, {{NG::kThresholdDb, -75.f}, {NG::kAttackMs, 3.f}, {NG::kReleaseMs, 90.f}, {NG::kRangeDb, -80.f}}),
+        slot(EffectType::Compressor, false, {{C::kThresholdDb, -22.f}, {C::kRatio, 1.6f}, {C::kAttackMs, 12.f}, {C::kReleaseMs, 130.f}, {C::kMakeupDb, 1.0f}}),
+        slot(EffectType::Overdrive, false, {{D::kDrive, 3.0f}, {D::kMix, 0.7f}, {D::kOutput, 0.88f}}),
+        slot(EffectType::Equalizer, false, {{E::kLowGainDb, 0.5f}, {E::kMidGainDb, 2.0f}, {E::kHighGainDb, -0.25f}, {E::kMidFreqHz, 880.f}, {E::kMidQ, 0.8f}, {E::kLowFreqHz, 110.f}, {E::kHighFreqHz, 3500.f}}),
+        slot(EffectType::AmpSim, false, {{A::kPreGain, 1.4f}, {A::kDrive, 3.8f}, {A::kBassDb, 1.0f}, {A::kMidDb, 2.0f}, {A::kTrebleDb, -0.25f}, {A::kPresenceDb, -0.5f}, {A::kMaster, 0.85f}}),
+        slot(EffectType::Cabinet, false, {{Cab::kMix, 0.98f}, {Cab::kLevel, 1.0f}}),
         slot(EffectType::Chorus, true, {{Ch::kRateHz, 0.8f}, {Ch::kDepthMs, 3.f}, {Ch::kMix, 0.f}}),
         slot(EffectType::Delay, true, {{Dl::kTimeMs, 300.f}, {Dl::kFeedback, 0.2f}, {Dl::kMix, 0.f}}),
         slot(EffectType::Reverb, true, {{R::kRoomSize, 0.3f}, {R::kDamping, 0.6f}, {R::kMix, 0.f}}),
-        slot(EffectType::Gain, false, {{G::kGain, 0.75f}}),
+        slot(EffectType::Gain, false, {{G::kGain, 1.1f}}),
     };
     return p;
 }
@@ -285,20 +285,25 @@ Preset makeFactoryMetal()
     using R = dsp::ReverbEffect;
     using G = dsp::GainEffect;
 
-    // Modern metal: OD as almost-wet boost into amp; saturate inside, not the DAC.
+    // Fender Mustang Metal 2000 / EVH 5150 III character:
+    // fast metal gate → Tube Screamer boost (low gain, high level) → deep mid scoop
+    // → high-gain amp with treble/presence up → cab. Tight, saturated, note-clear.
     Preset p;
     p.name = "Metal";
     p.effects = {
-        slot(EffectType::NoiseGate, false, {{NG::kThresholdDb, -62.f}, {NG::kAttackMs, 1.0f}, {NG::kReleaseMs, 50.f}, {NG::kRangeDb, -80.f}}),
-        slot(EffectType::Compressor, false, {{C::kThresholdDb, -22.f}, {C::kRatio, 2.0f}, {C::kAttackMs, 8.f}, {C::kReleaseMs, 90.f}, {C::kMakeupDb, 0.0f}}),
-        slot(EffectType::Overdrive, false, {{D::kDrive, 5.0f}, {D::kMix, 0.92f}, {D::kOutput, 0.7f}}),
-        slot(EffectType::Equalizer, false, {{E::kLowGainDb, 2.5f}, {E::kMidGainDb, -3.0f}, {E::kHighGainDb, 2.5f}, {E::kMidFreqHz, 800.f}, {E::kMidQ, 1.1f}, {E::kLowFreqHz, 95.f}, {E::kHighFreqHz, 4200.f}}),
-        slot(EffectType::AmpSim, false, {{A::kPreGain, 2.2f}, {A::kDrive, 8.5f}, {A::kBassDb, 2.0f}, {A::kMidDb, -2.0f}, {A::kTrebleDb, 1.5f}, {A::kPresenceDb, 1.0f}, {A::kMaster, 0.48f}}),
-        slot(EffectType::Cabinet, false, {{Cab::kMix, 0.95f}, {Cab::kLevel, 0.8f}}),
+        slot(EffectType::NoiseGate, false, {{NG::kThresholdDb, -48.f}, {NG::kAttackMs, 0.8f}, {NG::kReleaseMs, 35.f}, {NG::kRangeDb, -80.f}}),
+        slot(EffectType::Compressor, true, {{C::kThresholdDb, -18.f}, {C::kRatio, 1.5f}, {C::kAttackMs, 10.f}, {C::kReleaseMs, 80.f}, {C::kMakeupDb, 0.0f}}),
+        // Tube Screamer model: Gain ~2, Level ~7 — tight mid boost into the amp.
+        slot(EffectType::Overdrive, false, {{D::kDrive, 2.2f}, {D::kMix, 1.0f}, {D::kOutput, 1.35f}}),
+        // Graphic scoop: thump + presence, scooped mids (Mustang Mid ~3–4).
+        slot(EffectType::Equalizer, false, {{E::kLowGainDb, 3.5f}, {E::kMidGainDb, -6.0f}, {E::kHighGainDb, 3.5f}, {E::kMidFreqHz, 800.f}, {E::kMidQ, 1.25f}, {E::kLowFreqHz, 100.f}, {E::kHighFreqHz, 4200.f}}),
+        // Metal 2000: Gain~6, Bass~5, Mid~4, Treble~7, Presence~7.
+        slot(EffectType::AmpSim, false, {{A::kPreGain, 3.4f}, {A::kDrive, 14.0f}, {A::kBassDb, 1.0f}, {A::kMidDb, -3.5f}, {A::kTrebleDb, 4.0f}, {A::kPresenceDb, 5.0f}, {A::kMaster, 0.7f}}),
+        slot(EffectType::Cabinet, false, {{Cab::kMix, 1.0f}, {Cab::kLevel, 1.05f}}),
         slot(EffectType::Chorus, true, {{Ch::kRateHz, 0.8f}, {Ch::kDepthMs, 3.f}, {Ch::kMix, 0.f}}),
         slot(EffectType::Delay, true, {{Dl::kTimeMs, 250.f}, {Dl::kFeedback, 0.15f}, {Dl::kMix, 0.f}}),
-        slot(EffectType::Reverb, true, {{R::kRoomSize, 0.2f}, {R::kDamping, 0.7f}, {R::kMix, 0.f}}),
-        slot(EffectType::Gain, false, {{G::kGain, 0.78f}}),
+        slot(EffectType::Reverb, false, {{R::kRoomSize, 0.12f}, {R::kDamping, 0.8f}, {R::kMix, 0.03f}}),
+        slot(EffectType::Gain, false, {{G::kGain, 1.2f}}),
     };
     return p;
 }
@@ -316,20 +321,20 @@ Preset makeFactoryAmbient()
     using R = dsp::ReverbEffect;
     using G = dsp::GainEffect;
 
-    // Ambient wash with controlled wet stack (less echo pile-up / peaking).
+    // Ambient: lush wash at listening volume.
     Preset p;
     p.name = "Ambient";
     p.effects = {
         slot(EffectType::NoiseGate, true, {{NG::kThresholdDb, -75.f}, {NG::kAttackMs, 5.f}, {NG::kReleaseMs, 150.f}, {NG::kRangeDb, -80.f}}),
-        slot(EffectType::Compressor, false, {{C::kThresholdDb, -26.f}, {C::kRatio, 1.8f}, {C::kAttackMs, 16.f}, {C::kReleaseMs, 180.f}, {C::kMakeupDb, 0.5f}}),
-        slot(EffectType::Overdrive, true, {{D::kDrive, 2.f}, {D::kMix, 0.1f}, {D::kOutput, 1.f}}),
-        slot(EffectType::Equalizer, false, {{E::kLowGainDb, 1.5f}, {E::kMidGainDb, -0.5f}, {E::kHighGainDb, 2.0f}, {E::kMidFreqHz, 700.f}, {E::kMidQ, 0.6f}, {E::kLowFreqHz, 140.f}, {E::kHighFreqHz, 5000.f}}),
-        slot(EffectType::AmpSim, false, {{A::kPreGain, 1.3f}, {A::kDrive, 2.0f}, {A::kBassDb, 1.0f}, {A::kMidDb, -0.5f}, {A::kTrebleDb, 1.5f}, {A::kPresenceDb, 0.5f}, {A::kMaster, 0.75f}}),
-        slot(EffectType::Cabinet, false, {{Cab::kMix, 0.7f}, {Cab::kLevel, 0.9f}}),
-        slot(EffectType::Chorus, false, {{Ch::kRateHz, 0.28f}, {Ch::kDepthMs, 5.0f}, {Ch::kMix, 0.35f}}),
-        slot(EffectType::Delay, false, {{Dl::kTimeMs, 450.f}, {Dl::kFeedback, 0.32f}, {Dl::kMix, 0.22f}}),
-        slot(EffectType::Reverb, false, {{R::kRoomSize, 0.72f}, {R::kDamping, 0.4f}, {R::kMix, 0.28f}}),
-        slot(EffectType::Gain, false, {{G::kGain, 0.85f}}),
+        slot(EffectType::Compressor, false, {{C::kThresholdDb, -24.f}, {C::kRatio, 1.7f}, {C::kAttackMs, 18.f}, {C::kReleaseMs, 180.f}, {C::kMakeupDb, 1.5f}}),
+        slot(EffectType::Overdrive, true, {{D::kDrive, 1.5f}, {D::kMix, 0.08f}, {D::kOutput, 1.f}}),
+        slot(EffectType::Equalizer, false, {{E::kLowGainDb, 1.5f}, {E::kMidGainDb, -0.5f}, {E::kHighGainDb, 0.5f}, {E::kMidFreqHz, 700.f}, {E::kMidQ, 0.6f}, {E::kLowFreqHz, 140.f}, {E::kHighFreqHz, 4500.f}}),
+        slot(EffectType::AmpSim, false, {{A::kPreGain, 1.2f}, {A::kDrive, 2.0f}, {A::kBassDb, 1.0f}, {A::kMidDb, 0.0f}, {A::kTrebleDb, 0.5f}, {A::kPresenceDb, -0.5f}, {A::kMaster, 0.95f}}),
+        slot(EffectType::Cabinet, false, {{Cab::kMix, 0.9f}, {Cab::kLevel, 1.0f}}),
+        slot(EffectType::Chorus, false, {{Ch::kRateHz, 0.25f}, {Ch::kDepthMs, 4.5f}, {Ch::kMix, 0.32f}}),
+        slot(EffectType::Delay, false, {{Dl::kTimeMs, 420.f}, {Dl::kFeedback, 0.28f}, {Dl::kMix, 0.18f}}),
+        slot(EffectType::Reverb, false, {{R::kRoomSize, 0.7f}, {R::kDamping, 0.45f}, {R::kMix, 0.26f}}),
+        slot(EffectType::Gain, false, {{G::kGain, 1.1f}}),
     };
     return p;
 }

@@ -6,7 +6,8 @@
 
 namespace dsp {
 
-// Simple amp sim: pre-EQ → tanh stages → anti-squeal LP → tone stack → master.
+// Amp sim with drive-adaptive voicing: clean/crunch stay warm;
+// high drive opens into Metal 2000 / 5150-style tight high-gain.
 class AmpSimEffect final : public Effect {
 public:
     enum Parameter : int {
@@ -27,6 +28,7 @@ public:
 
 private:
     void updateTone();
+    void updateVoicing();
 
     double sampleRate_ = 48000.0;
 
@@ -38,6 +40,7 @@ private:
     SmoothedValue presenceDb_;
     SmoothedValue master_;
 
+    Biquad preHp_;
     Biquad preLow_;
     Biquad preHigh_;
     Biquad postDriveLp_;
@@ -45,6 +48,9 @@ private:
     Biquad toneMid_;
     Biquad toneHigh_;
     Biquad presence_;
+
+    float sagEnv_ = 0.0f;
+    float lastVoicingT_ = -1.0f;
 };
 
 } // namespace dsp

@@ -15,8 +15,8 @@ namespace app {
 
 constexpr int kNumSlots = preset::kNumSlots;
 constexpr int kMaxBlockFrames = 4096;
-// Studio input pad (~-6 dB) — keeps hot interfaces from slamming the amp chain.
-constexpr float kInputTrim = 0.5f;
+// Mild input pad (~-3 dB) — enough for hot interfaces, loud enough to drive amp/pedals.
+constexpr float kInputTrim = 0.7f;
 
 enum Slot : int {
     kGate = 0,

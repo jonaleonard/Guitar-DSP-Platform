@@ -8,7 +8,8 @@ enum class BiquadType {
     LowShelf,
     HighShelf,
     Peak,
-    LowPass
+    LowPass,
+    HighPass
 };
 
 struct BiquadCoeffs {

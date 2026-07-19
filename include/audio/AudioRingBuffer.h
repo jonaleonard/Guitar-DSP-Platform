@@ -16,7 +16,7 @@ public:
 
     AudioRingBuffer() = default;
 
-    // Audio thread only. samples should be pre-soft-clip for honest metering.
+    // Audio thread only. Prefer writing the post-limiter output so CLIP matches what you hear.
     void write(const float* samples, int numFrames)
     {
         if (samples == nullptr || numFrames <= 0) {
