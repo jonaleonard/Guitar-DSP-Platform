@@ -1,6 +1,9 @@
 add_library(guitar_dsp_audio
     audio/AudioEngine.cpp
     audio/ParameterQueue.cpp
+    dsp/EffectGraph.cpp
+    dsp/GainEffect.cpp
+    dsp/GraphCommandQueue.cpp
 )
 
 target_include_directories(guitar_dsp_audio

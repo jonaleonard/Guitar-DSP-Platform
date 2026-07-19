@@ -21,26 +21,33 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-## Phase 1 — live wire (guitar test)
+## Phase 2 — live Gain graph (guitar check)
 
-Plug in the Volt 1 and guitar, then:
+1. In **Audio MIDI Setup**, set the Volt to **48 kHz**.
+2. Prefer **headphones plugged into the Volt** (same-device I/O — avoids cross-device crackle).
+3. Run:
 
 ```bash
 ./build/src/guitar_dsp_platform
 ```
 
-You should hear unprocessed guitar through your headphones/monitors. Press Enter to stop.
+4. Success check:
+   - Hear guitar through the Gain effect
+   - `g 0.3` lowers level, `g 1.0` restores
+   - `b` toggles bypass (dry vs gained) with no crash
+   - Watch for `[xrun]` lines — should stay at 0 if I/O is stable
 
-Baseline to note: sample rate, buffer frames, and stream latency printed at startup.
+Commands: `g <0..2>`, `b`, `s`, `h`, `q`
 
-## Offline harness (no hardware)
+If you still hear crackling with headphones on the Volt, try buffer `1024` in `src/main.cpp` (`config.bufferFrames`).
+
+## Offline harnesses
 
 ```bash
 ./build/tests/sine_to_wav_test build/sine_wire.wav
+./build/tests/gain_graph_test build/gain_graph.wav
 ```
-
-Writes a 1-second 440 Hz mono→stereo wire-through WAV and validates the parameter queue path.
 
 ## Status
 
-Phase 1 — real-time audio engine core (ready to test).
+Phase 2 — effect interface & modular graph (ready to test).

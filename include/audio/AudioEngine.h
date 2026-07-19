@@ -6,6 +6,7 @@
 
 #include <array>
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -17,11 +18,15 @@ struct AudioEngineConfig {
     unsigned int inputDeviceId = 0;
     unsigned int outputDeviceId = 0;
     unsigned int sampleRate = 48000;
-    unsigned int bufferFrames = 256;
+    unsigned int bufferFrames = 512;
     unsigned int inputChannels = 1;
     unsigned int outputChannels = 2;
-    bool minimizeLatency = true;
+    // Prefer stability over minimum latency; raise buffer / disable minimize if you hear crackle.
+    bool minimizeLatency = false;
+    // Prefer Volt (or named input device) for output when it has outputs — same clock domain.
+    bool preferSameDeviceOutput = true;
     bool useDefaultOutputDevice = true;
+    bool scheduleRealtime = true;
 };
 
 // Interleaved float buffers. Channel counts are fixed for the lifetime of the stream.
@@ -62,6 +67,9 @@ public:
 
     float getParameter(int paramId) const;
 
+    std::uint64_t inputOverflowCount() const;
+    std::uint64_t outputUnderflowCount() const;
+
 private:
     static int rtAudioCallback(void* outputBuffer,
                                void* inputBuffer,
@@ -73,6 +81,7 @@ private:
     void processBlockInternal(const float* input, float* output, unsigned int numFrames);
     void drainParameterQueue();
     void wireThrough(const float* input, float* output, unsigned int numFrames) const;
+    void silenceOutput(float* output, unsigned int numFrames) const;
 
     bool resolveDevices();
     bool openStream();
@@ -87,10 +96,13 @@ private:
     unsigned int resolvedInputDeviceId_ = 0;
     unsigned int resolvedOutputDeviceId_ = 0;
     unsigned int actualBufferFrames_ = 0;
+    unsigned int actualSampleRate_ = 0;
     unsigned int streamLatencySamples_ = 0;
     bool streamOpen_ = false;
 
     std::array<std::atomic<float>, kMaxParameters> parameterValues_{};
+    std::atomic<std::uint64_t> inputOverflowCount_{0};
+    std::atomic<std::uint64_t> outputUnderflowCount_{0};
 };
 
 } // namespace audio

@@ -61,6 +61,16 @@ void printDevices(RtAudio& audio)
     }
 }
 
+bool deviceSupportsSampleRate(const RtAudio::DeviceInfo& info, const unsigned int sampleRate)
+{
+    if (info.sampleRates.empty()) {
+        return true;
+    }
+
+    return std::find(info.sampleRates.begin(), info.sampleRates.end(), sampleRate) !=
+           info.sampleRates.end();
+}
+
 } // namespace
 
 AudioEngine::AudioEngine(const AudioEngineConfig& config)
@@ -145,7 +155,7 @@ void AudioEngine::processOfflineBlock(const float* input, float* output, const i
 
 unsigned int AudioEngine::sampleRate() const
 {
-    return config_.sampleRate;
+    return actualSampleRate_ != 0 ? actualSampleRate_ : config_.sampleRate;
 }
 
 unsigned int AudioEngine::bufferFrames() const
@@ -187,17 +197,44 @@ float AudioEngine::getParameter(const int paramId) const
     return parameterValues_[static_cast<std::size_t>(paramId)].load(std::memory_order_relaxed);
 }
 
+std::uint64_t AudioEngine::inputOverflowCount() const
+{
+    return inputOverflowCount_.load(std::memory_order_relaxed);
+}
+
+std::uint64_t AudioEngine::outputUnderflowCount() const
+{
+    return outputUnderflowCount_.load(std::memory_order_relaxed);
+}
+
 int AudioEngine::rtAudioCallback(void* outputBuffer,
                                  void* inputBuffer,
                                  const unsigned int numFrames,
                                  double /*streamTime*/,
-                                 RtAudioStreamStatus /*status*/,
+                                 RtAudioStreamStatus status,
                                  void* userData)
 {
     auto* engine = static_cast<AudioEngine*>(userData);
-    engine->processBlockInternal(static_cast<const float*>(inputBuffer),
-                                 static_cast<float*>(outputBuffer),
-                                 numFrames);
+
+    if ((status & RTAUDIO_INPUT_OVERFLOW) != 0) {
+        engine->inputOverflowCount_.fetch_add(1, std::memory_order_relaxed);
+    }
+    if ((status & RTAUDIO_OUTPUT_UNDERFLOW) != 0) {
+        engine->outputUnderflowCount_.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    auto* out = static_cast<float*>(outputBuffer);
+    if (out == nullptr) {
+        return 0;
+    }
+
+    const auto* in = static_cast<const float*>(inputBuffer);
+    if (in == nullptr) {
+        engine->silenceOutput(out, numFrames);
+        return 0;
+    }
+
+    engine->processBlockInternal(in, out, numFrames);
     return 0;
 }
 
@@ -259,6 +296,15 @@ void AudioEngine::wireThrough(const float* input, float* output, const unsigned 
     }
 }
 
+void AudioEngine::silenceOutput(float* output, const unsigned int numFrames) const
+{
+    if (output == nullptr || numFrames == 0) {
+        return;
+    }
+
+    std::memset(output, 0, static_cast<std::size_t>(numFrames) * config_.outputChannels * sizeof(float));
+}
+
 bool AudioEngine::resolveDevices()
 {
     if (audio_->getDeviceIds().empty()) {
@@ -284,9 +330,17 @@ bool AudioEngine::resolveDevices()
         inputDeviceName_ = audio_->getDeviceInfo(resolvedInputDeviceId_).name;
     }
 
+    const RtAudio::DeviceInfo inputInfo = audio_->getDeviceInfo(resolvedInputDeviceId_);
+
     if (config_.outputDeviceId != 0) {
         resolvedOutputDeviceId_ = config_.outputDeviceId;
         outputDeviceName_ = audio_->getDeviceInfo(resolvedOutputDeviceId_).name;
+    } else if (config_.preferSameDeviceOutput && inputInfo.outputChannels > 0) {
+        // Same physical device for in+out avoids cross-device clock mismatch crackle.
+        resolvedOutputDeviceId_ = resolvedInputDeviceId_;
+        outputDeviceName_ = inputInfo.name;
+        std::cerr << "Using same-device output on \"" << outputDeviceName_
+                  << "\" (plug headphones into the interface if needed).\n";
     } else if (config_.useDefaultOutputDevice) {
         const std::optional<unsigned int> outputDeviceId = findDefaultOutputDeviceId(*audio_);
         if (!outputDeviceId.has_value()) {
@@ -298,13 +352,31 @@ bool AudioEngine::resolveDevices()
 
         resolvedOutputDeviceId_ = *outputDeviceId;
         outputDeviceName_ = audio_->getDeviceInfo(resolvedOutputDeviceId_).name;
+
+        if (resolvedOutputDeviceId_ != resolvedInputDeviceId_) {
+            std::cerr << "Warning: input and output are different devices ("
+                      << inputDeviceName_ << " → " << outputDeviceName_
+                      << "). Cross-device duplex often causes crackling on macOS.\n"
+                      << "Prefer headphones into the Volt, or create an Aggregate Device "
+                         "in Audio MIDI Setup.\n";
+        }
     } else {
         std::cerr << "No output device configured.\n";
         return false;
     }
 
-    const RtAudio::DeviceInfo inputInfo = audio_->getDeviceInfo(resolvedInputDeviceId_);
     const RtAudio::DeviceInfo outputInfo = audio_->getDeviceInfo(resolvedOutputDeviceId_);
+
+    if (!deviceSupportsSampleRate(inputInfo, config_.sampleRate) ||
+        !deviceSupportsSampleRate(outputInfo, config_.sampleRate)) {
+        std::cerr << "Warning: requested sample rate " << config_.sampleRate
+                  << " Hz may not be listed for one of the devices "
+                     "(input preferred="
+                  << inputInfo.preferredSampleRate << ", output preferred="
+                  << outputInfo.preferredSampleRate << ").\n"
+                  << "Set both devices to " << config_.sampleRate
+                  << " Hz in Audio MIDI Setup if you hear crackling.\n";
+    }
 
     config_.inputChannels = std::min(config_.inputChannels, inputInfo.inputChannels);
     config_.outputChannels = std::min(config_.outputChannels, outputInfo.outputChannels);
@@ -333,9 +405,15 @@ bool AudioEngine::openStream()
 
     auto tryOpen = [&](const bool minimizeLatency) {
         RtAudio::StreamOptions options;
+        options.flags = 0;
         if (minimizeLatency) {
-            options.flags = RTAUDIO_MINIMIZE_LATENCY;
+            options.flags |= RTAUDIO_MINIMIZE_LATENCY;
         }
+        if (config_.scheduleRealtime) {
+            options.flags |= RTAUDIO_SCHEDULE_REALTIME;
+        }
+        // Give CoreAudio a little extra buffering when not minimizing latency.
+        options.numberOfBuffers = minimizeLatency ? 2 : 4;
 
         actualBufferFrames_ = config_.bufferFrames;
         return audio_->openStream(&outParams,
@@ -355,6 +433,11 @@ bool AudioEngine::openStream()
 
     streamOpen_ = true;
     streamLatencySamples_ = audio_->getStreamLatency();
+    actualSampleRate_ = audio_->getStreamSampleRate();
+    if (actualSampleRate_ == 0) {
+        actualSampleRate_ = config_.sampleRate;
+    }
+
     return true;
 }
 
