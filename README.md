@@ -12,28 +12,31 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-## Phase 7 — Presets (easy switching)
+GLFW and Dear ImGui are fetched automatically via CMake `FetchContent` on first configure.
 
-Starts on **Clean** (dry wire). Soft-mute crossfade on every preset change (no clicks).
-
-### Live guitar — switch presets while playing
+## Phase 8 — GUI
 
 ```bash
 ./build/src/guitar_dsp_platform
 ```
 
-| Command | Action |
-|---------|--------|
-| `p` | list presets |
-| `p 0` … `p 4` | load by index |
-| `p blues` | load by name |
-| `n` or `]` | **next** preset |
-| `b` or `[` | **previous** preset |
-| `clean` | jump to Clean |
+Opens an ImGui window (GUI thread separate from audio). All parameter / bypass / preset changes go through the lock-free graph command queue — the GUI never touches DSP objects on the audio thread.
 
-Factory presets: **Clean → Blues → Crunch → Metal → Ambient**
+| UI | Action |
+|----|--------|
+| Preset buttons | Soft-mute crossfade load (Clean → Blues → Crunch → Metal → Ambient) |
+| Effect panels | Enable toggle + sliders; editing a slider auto-enables that effect |
+| Top bar | Buffer latency (ms), sample rate, rough DSP load % |
 
-JSON copies are written to `presets/*.json` at startup (editable).
+Factory preset character:
+
+- **Clean** — dry wire (gain only)
+- **Blues** — soft OD/amp, tiny room; no gate, no delay
+- **Crunch** — mid-forward rock grind + cab; gate/delay/reverb off
+- **Metal** — high-gain scoop + cab; very light gate; delay/reverb off
+- **Ambient** — chorus / delay / reverb wash
+
+JSON copies are written to `presets/*.json` at startup.
 
 ### Automated
 
@@ -43,4 +46,4 @@ ctest --test-dir build --output-on-failure -R preset
 
 ## Status
 
-Phase 7 — preset system (ready to test).
+Phase 8 — Dear ImGui control surface (ready to test).

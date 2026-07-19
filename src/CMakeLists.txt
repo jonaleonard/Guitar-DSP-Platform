@@ -1,3 +1,5 @@
+include(${CMAKE_SOURCE_DIR}/cmake/FetchImGui.cmake)
+
 add_library(guitar_dsp_audio
     audio/AudioEngine.cpp
     audio/ParameterQueue.cpp
@@ -33,9 +35,18 @@ target_link_libraries(guitar_dsp_audio
         RtAudio::rtaudio
 )
 
-add_executable(guitar_dsp_platform main.cpp)
+add_executable(guitar_dsp_platform
+    main.cpp
+    app/AppContext.cpp
+    app/GuiApp.cpp
+)
 
 target_link_libraries(guitar_dsp_platform
     PRIVATE
         guitar_dsp_audio
+        imgui_glfw_gl3
 )
+
+if(APPLE)
+    target_link_libraries(guitar_dsp_platform PRIVATE "-framework Cocoa" "-framework IOKit" "-framework CoreVideo")
+endif()
